@@ -1,0 +1,21 @@
+name: Light Sensor Validation
+version: 1
+
+steps:
+  - delay: 2500ms
+
+  - set-control:
+      part-id: ldr
+      control: lux
+      value: 50000
+
+  - delay: 1200ms
+  - wait-serial: '"pct":'
+
+  - set-control:
+      part-id: ldr
+      control: lux
+      value: 10
+
+  - delay: 1200ms
+  - wait-serial: '"pct":'

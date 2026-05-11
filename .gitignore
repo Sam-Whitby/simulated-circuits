@@ -1,0 +1,7 @@
+.pio/
+.vscode/
+*.pyc
+*.db
+boot.log
+sim.log
+screenshot.png
