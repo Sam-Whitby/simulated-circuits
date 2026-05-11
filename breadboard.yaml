@@ -10,6 +10,10 @@
 # Rule: each hole accepts exactly one component lead or one jumper wire pin.
 # Wires that connect to a component node must use a DIFFERENT hole in the
 # same row-half, not the hole occupied by the component pin itself.
+#
+# External wire endpoints:
+#   "ext:lcd:PIN" — wire goes to the named pin on the external LCD module
+#   (LCD sits beside the breadboard; see external_components section below)
 
 breadboard:
   type: full-size
@@ -19,14 +23,7 @@ breadboard:
 components:
 
   # ── ESP32-S3 DevKitC-1 ──────────────────────────────────────────────────
-  # Dimensions from board.json: width=25.527mm, height=70.057mm
-  # Left header at x=1.343mm, right header at x=24.19mm (pin-to-pin = 22.847mm ≈ 9 hole-spacings)
-  # → left pins in col A, right pins in col I
-  # Board top clearance: 7.667mm (≈3 rows) above pin-1 — hangs off the breadboard top edge
-  # Board bottom overhang: (70.057-61.007)mm / 2.54mm = 3.56 rows below pin-22
-  # → board body bottom = row 22 + 3.56 ≈ row 26
-  # CONSEQUENCE: rows 1-26, columns A-J are physically covered by the PCB body.
-  # No other component may be placed in that zone.
+  # Board body: rows 1-26, cols A-J (nothing else may go in this zone).
   - id: esp32
     type: board-esp32-s3-devkitc-1
     body:
@@ -100,7 +97,6 @@ components:
   # ── 10K pull-down resistor ──────────────────────────────────────────────
   # Rows 29-31, column G (right half, adjacent to LDR column H).
   # lead-1 shares the junction node with ldr.lead-2 (same row 29, right half).
-  # lead-2 = GND end (G31).
   - id: resistor-10k
     type: resistor
     body:
@@ -113,162 +109,170 @@ components:
       lead-2: G31   # GND end
 
   # ── Potentiometer (10K, LCD contrast) ───────────────────────────────────
-  # Rows 33-35, column C (left half).
-  # Pin order: gnd-end (C33), wiper (C34), vcc-end (C35)
+  # 2+1 pin arrangement: two terminal pins on one side, wiper on the other.
+  # Rotate pot 90° for breadboard use:
+  #   • gnd-end and vcc-end go in the SAME COLUMN (C), different rows.
+  #     (Different rows = different breadboard nets — they are NOT shorted.)
+  #   • wiper goes 2 columns to the right (E), centred between the terminals.
+  # Pin positions verified by parts_library.yaml (potentiometer-10k offsets).
   - id: pot
     type: potentiometer-10k
     body:
       top-row: 33
       bottom-row: 35
       left-col: C
-      right-col: C
-    pins:
-      gnd-end: C33
-      wiper:   C34
-      vcc-end: C35
-
-  # ── LCD1602 (16-pin parallel) ────────────────────────────────────────────
-  # 16 pins in column E, rows 38-53.  Pin 1 (VSS) at E38, pin 16 (K) at E53.
-  # 4-bit mode: D0-D3 (E44-E47) left unconnected.
-  - id: lcd
-    type: lcd1602-16pin
-    body:
-      top-row: 38
-      bottom-row: 53
-      left-col: E
       right-col: E
     pins:
-      VSS: E38   # pin  1  GND
-      VDD: E39   # pin  2  3.3V
-      V0:  E40   # pin  3  contrast (potentiometer wiper)
-      RS:  E41   # pin  4  GPIO4
-      RW:  E42   # pin  5  GND (write-only)
-      E:   E43   # pin  6  GPIO5 (Enable)
-      D0:  E44   # pin  7  unused in 4-bit mode
-      D1:  E45   # pin  8  unused
-      D2:  E46   # pin  9  unused
-      D3:  E47   # pin 10  unused
-      D4:  E48   # pin 11  GPIO6
-      D5:  E49   # pin 12  GPIO7
-      D6:  E50   # pin 13  GPIO8
-      D7:  E51   # pin 14  GPIO9
-      A:   E52   # pin 15  backlight anode  (+)
-      K:   E53   # pin 16  backlight cathode (-)
+      gnd-end: C33   # top terminal
+      vcc-end: C35   # bottom terminal (same col C, 2 rows below — different net)
+      wiper:   E34   # wiper (2 cols right of C = col E, row between terminals)
+
+# ── External components ──────────────────────────────────────────────────────
+# Components that connect to the circuit via wires but are NOT placed on the
+# breadboard.  Their bodies do not occupy any breadboard holes.
+#
+# WHY external?  The LCD1602A PCB is 80×36 mm.  With pins in a single
+# breadboard column it would cover ≈31 rows × 14 columns of board surface.
+# Given the ESP32-S3 body at rows 1-26 there is no position on a 63-row
+# breadboard where the LCD can sit without either overlapping the pot / LDR
+# region or running off the bottom.  Connect it via individual jumper wires.
+external_components:
+  - id: lcd
+    type: lcd1602-16pin
+    reason: "PCB (80×36 mm) too large to place on-board alongside ESP32-S3"
+    connections:
+      # Breadboard/rail side → LCD pin
+      # Power
+      VSS:  rail-minus      # LCD GND
+      VDD:  rail-plus       # LCD 3.3 V
+      RW:   rail-minus      # write-only mode (tie to GND)
+      A:    rail-plus       # backlight anode
+      K:    rail-minus      # backlight cathode
+      # Contrast (from potentiometer wiper)
+      V0:   D34             # D34 is electrically connected to pot wiper at E34
+      # GPIO signals
+      RS:   B4              # adjacent to ESP32 GPIO4 at A4
+      E:    B5              # adjacent to ESP32 GPIO5 at A5
+      D4:   B6              # adjacent to ESP32 GPIO6 at A6
+      D5:   B7              # adjacent to ESP32 GPIO7 at A7
+      D6:   B12             # adjacent to ESP32 GPIO8 at A12 (NOT row 8)
+      D7:   B15             # adjacent to ESP32 GPIO9 at A15 (NOT row 9)
 
 wires:
   # ── Power rail setup ────────────────────────────────────────────────────
-  # A1/A22/I1 are occupied by ESP32 pins → use adjacent holes in the same row.
+  # A1/A22/I1 are occupied by ESP32 pins → use adjacent holes.
 
-  - from: B1          # row 1 left-half; A1 is occupied by esp32.3V3.1
+  - from: B1          # row 1 left-half; A1 occupied by esp32.3V3.1
     to:   rail-plus
     color: red
     purpose: ESP32 3.3V → (+) power rail
 
-  - from: B22         # row 22 left-half; A22 is occupied by esp32.GND.1
+  - from: B22         # row 22 left-half; A22 occupied by esp32.GND.1
     to:   rail-minus
     color: black
     purpose: ESP32 GND (left header) → (-) power rail
 
-  - from: J1          # row 1 right-half; I1 is occupied by esp32.GND.2
+  - from: J1          # row 1 right-half; I1 occupied by esp32.GND.2
     to:   rail-minus
     color: black
     purpose: ESP32 GND (right header) → (-) power rail
 
   # ── LDR voltage divider ─────────────────────────────────────────────────
-  # H28 = LDR 3V3 end; H29/G29 = junction; G31 = resistor GND end
-  # Use column F (free) for the two rail connections; row 29 column F for ADC wire.
+  # H28 = LDR 3V3 end; H29/G29 = junction node; G31 = resistor GND end
+  # Column F is free in these rows — use it for the rail/junction wires.
 
   - from: rail-plus
-    to:   F28         # row 28 right-half; H28 is occupied by ldr.lead-1
+    to:   F28         # row 28 right-half; H28 occupied by ldr.lead-1
     color: red
     purpose: 3.3V → top of LDR
 
-  - from: F31         # row 31 right-half; G31 is occupied by resistor-10k.lead-2
+  - from: F31         # row 31 right-half; G31 occupied by resistor-10k.lead-2
     to:   rail-minus
     color: black
     purpose: Bottom of 10K resistor → GND
 
   - from: F29         # row 29 right-half; G29 and H29 occupied; F29 is free
-    to:   J4          # row 4 right-half; I4 is occupied by esp32.GPIO1; J4 is free
+    to:   J4          # row 4 right-half; I4 occupied by esp32.GPIO1; J4 is free
     color: yellow
     purpose: LDR junction → ESP32 GPIO1 (ADC input)
 
   # ── Potentiometer ────────────────────────────────────────────────────────
-  # C33/C34/C35 occupied by pot pins → use column B (free) for wires.
+  # C33/C35 are terminal pins; E34 is the wiper.
+  # Use column B (free) for the terminal wires.
+  # D34 is electrically connected to wiper at E34 (same row-half, free hole).
 
   - from: B33         # row 33 left-half; C33 occupied by pot.gnd-end
     to:   rail-minus
     color: black
-    purpose: Potentiometer GND end → (-) rail
+    purpose: Potentiometer GND terminal → (-) rail
 
   - from: B35         # row 35 left-half; C35 occupied by pot.vcc-end
     to:   rail-plus
     color: red
-    purpose: Potentiometer VCC end → (+) rail
+    purpose: Potentiometer VCC terminal → (+) rail
 
-  - from: B34         # row 34 left-half; C34 occupied by pot.wiper
-    to:   D40         # row 40 left-half; E40 occupied by lcd.V0
+  - from: D34         # row 34 left-half; E34 occupied by pot.wiper; D34 is free
+    to:   ext:lcd:V0
     color: green
     purpose: Potentiometer wiper → LCD contrast (V0, pin 3)
 
-  # ── LCD power and mode wires ─────────────────────────────────────────────
-  # LCD pins in column E → use column D (free, same row) for wire endpoints.
+  # ── LCD power / mode wires (to external LCD) ─────────────────────────────
 
-  - from: D38         # row 38; E38 occupied by lcd.VSS
-    to:   rail-minus
+  - from: rail-minus
+    to:   ext:lcd:VSS
     color: black
     purpose: LCD VSS (pin 1) → GND
 
-  - from: D39         # row 39; E39 occupied by lcd.VDD
-    to:   rail-plus
+  - from: rail-plus
+    to:   ext:lcd:VDD
     color: red
     purpose: LCD VDD (pin 2) → 3.3V
 
-  - from: D42         # row 42; E42 occupied by lcd.RW
-    to:   rail-minus
+  - from: rail-minus
+    to:   ext:lcd:RW
     color: black
     purpose: LCD RW (pin 5) → GND (write-only mode)
 
-  - from: D52         # row 52; E52 occupied by lcd.A (backlight+)
-    to:   rail-plus
+  - from: rail-plus
+    to:   ext:lcd:A
     color: red
     purpose: LCD backlight anode (pin 15) → 3.3V
 
-  - from: D53         # row 53; E53 occupied by lcd.K (backlight-)
-    to:   rail-minus
+  - from: rail-minus
+    to:   ext:lcd:K
     color: black
     purpose: LCD backlight cathode (pin 16) → GND
 
   # ── GPIO → LCD control and data wires ────────────────────────────────────
   # ESP32 GPIO pins in column A → use column B (free) as wire source.
-  # LCD pins in column E → use column D (free) as wire destination.
+  # Wire goes from B-column breadboard hole directly to LCD header pin.
 
-  - from: B4          # row 4 left-half; A4 occupied by esp32.GPIO4
-    to:   D41         # row 41 left-half; E41 occupied by lcd.RS
+  - from: B4          # row 4; A4 = GPIO4
+    to:   ext:lcd:RS
     color: blue
     purpose: GPIO4 → LCD RS (pin 4, data/command select)
 
   - from: B5          # row 5; A5 = GPIO5
-    to:   D43         # row 43; E43 = lcd.E (Enable)
+    to:   ext:lcd:E
     color: purple
     purpose: GPIO5 → LCD Enable (pin 6)
 
   - from: B6          # row 6; A6 = GPIO6
-    to:   D48         # row 48; E48 = lcd.D4
+    to:   ext:lcd:D4
     color: orange
     purpose: GPIO6 → LCD D4 (pin 11)
 
   - from: B7          # row 7; A7 = GPIO7
-    to:   D49         # row 49; E49 = lcd.D5
+    to:   ext:lcd:D5
     color: yellow
     purpose: GPIO7 → LCD D5 (pin 12)
 
-  - from: B12         # row 12; A12 = GPIO8  (note: NOT row 8)
-    to:   D50         # row 50; E50 = lcd.D6
+  - from: B12         # row 12; A12 = GPIO8  (GPIO8 is at row 12, NOT row 8)
+    to:   ext:lcd:D6
     color: green
     purpose: GPIO8 → LCD D6 (pin 13)
 
-  - from: B15         # row 15; A15 = GPIO9  (note: GPIO9 is at row 15, not row 9)
-    to:   D51         # row 51; E51 = lcd.D7
+  - from: B15         # row 15; A15 = GPIO9  (GPIO9 is at row 15, NOT row 9)
+    to:   ext:lcd:D7
     color: white
     purpose: GPIO9 → LCD D7 (pin 14)

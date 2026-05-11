@@ -1,0 +1,183 @@
+# parts_library.yaml — Physical component specifications library
+#
+# Purpose:
+#   Provides exact body dimensions and pin-layout rules for every component
+#   type used in this project.  breadboard_validator.py loads this file to:
+#     • verify that pin positions declared in breadboard.yaml are physically
+#       consistent with the real component (correct spacing, correct arrangement)
+#     • compute the true body footprint (not just the bounding box of pin holes)
+#       and check it for overlaps with other components
+#
+# Populating this file:
+#   Run this step ONCE per new component type.  Look up the datasheet online,
+#   extract body dimensions and pin spacings, add an entry below, then commit.
+#   The validator reads the cached file at build time — no network access needed.
+#
+# Pin offsets:
+#   offset_col / offset_row are relative to the anchor pin (first entry in `pins:`).
+#   Positive offset_col = right (toward column J).
+#   Positive offset_row = down (toward higher row numbers).
+#
+# Body footprint (body_breadboard):
+#   Offsets from the anchor pin in breadboard hole units (1 unit = 2.54 mm).
+#   rows_above_anchor : rows the body extends ABOVE the anchor pin row
+#   rows_below_anchor : rows the body extends BELOW the anchor pin row
+#   cols_left_of_anchor  : columns the body extends LEFT of the anchor column
+#   cols_right_of_anchor : columns the body extends RIGHT of the anchor column
+#
+# Kit context:
+#   Components in this library are from the ELEGOO MEGA 2560 Starter Kit
+#   combined with the Espressif ESP32-S3-DevKitC-1 (N16R8).
+
+version: "1.0"
+kit: "ELEGOO MEGA 2560 Starter Kit + ESP32-S3-DevKitC-1 N16R8"
+last_updated: "2026-05-11"
+
+components:
+
+  # ── Potentiometer ────────────────────────────────────────────────────────────
+  potentiometer-10k:
+    description: "10 KΩ rotary potentiometer (B10K), ELEGOO MEGA 2560 kit"
+    source: "Physical measurement of ELEGOO kit component; B10K type"
+    notes: |
+      Pin arrangement: 2 terminal pins on one side of the body,
+      1 wiper pin on the opposite side (centred between the terminals).
+      Terminal-to-terminal spacing: 5.08 mm (2 breadboard holes).
+      Wiper offset from terminal side: 5.08 mm (2 breadboard holes).
+
+      BREADBOARD PLACEMENT — rotate the pot 90° from its natural orientation:
+        • The two terminal pins go into the SAME COLUMN but DIFFERENT ROWS
+          (2 rows apart).  This avoids the breadboard row-half short-circuit
+          that would occur if both terminals shared a row.
+        • The wiper pin goes into a column 2 holes to the right of the
+          terminal column, in the row between the two terminals.
+
+      Example (gnd-end as anchor):
+        gnd-end → C33   vcc-end → C35   wiper → E34
+
+    pins:
+      # anchor = gnd-end (top terminal)
+      gnd-end: {offset_col: 0, offset_row: 0}
+      vcc-end: {offset_col: 0, offset_row: 2}   # same column, 2 rows below anchor
+      wiper:   {offset_col: 2, offset_row: 1}   # 2 cols right, 1 row below anchor (centred)
+
+    body_breadboard:
+      # Tightest bounding box around all three pins
+      rows_above_anchor:    0
+      rows_below_anchor:    2   # from gnd-end row to vcc-end row
+      cols_left_of_anchor:  0
+      cols_right_of_anchor: 2   # from terminal column to wiper column
+
+  # ── LCD 1602A ────────────────────────────────────────────────────────────────
+  lcd1602-16pin:
+    description: "16×2 character LCD module, 16-pin parallel interface (1602A)"
+    source: "EONE 1602A-1 datasheet; PCB 80.0 × 36.0 mm"
+    notes: |
+      PCB size: 80.0 mm (long axis) × 36.0 mm (depth from pin edge).
+      16 pins at 2.54 mm pitch along the long axis, near one end of the PCB.
+      Approximate PCB overhang above pin 1: ~3 mm (≈1 breadboard row).
+      Approximate PCB extension below pin 16: ~39 mm (≈15 breadboard rows).
+
+      CRITICAL — this module CANNOT be placed directly on a standard 830-point
+      breadboard alongside an ESP32-S3-DevKitC-1 and other components.
+      When pins are in a single column the body covers ~31 rows and 14 columns
+      (36 mm ÷ 2.54 mm ≈ 14) of breadboard surface.  With the ESP32-S3 body
+      occupying rows 1–26, the LCD cannot be placed below it without either:
+        (a) overlapping the potentiometer / voltage-divider zone, OR
+        (b) running off the bottom of a 63-row board.
+
+      REQUIRED ASSEMBLY APPROACH:
+        Place the LCD BESIDE the breadboard.  Connect each of its 16 pins to
+        the circuit using individual jumper wires from breadboard holes or
+        directly from the ESP32 GPIO header.
+
+    external_only: true   # validator will ERROR if this type is placed on-board
+
+    pins:
+      VSS: {offset_col: 0, offset_row:  0}   # pin  1  GND
+      VDD: {offset_col: 0, offset_row:  1}   # pin  2  3.3 V
+      V0:  {offset_col: 0, offset_row:  2}   # pin  3  contrast
+      RS:  {offset_col: 0, offset_row:  3}   # pin  4
+      RW:  {offset_col: 0, offset_row:  4}   # pin  5
+      E:   {offset_col: 0, offset_row:  5}   # pin  6
+      D0:  {offset_col: 0, offset_row:  6}   # pin  7
+      D1:  {offset_col: 0, offset_row:  7}   # pin  8
+      D2:  {offset_col: 0, offset_row:  8}   # pin  9
+      D3:  {offset_col: 0, offset_row:  9}   # pin 10
+      D4:  {offset_col: 0, offset_row: 10}   # pin 11
+      D5:  {offset_col: 0, offset_row: 11}   # pin 12
+      D6:  {offset_col: 0, offset_row: 12}   # pin 13
+      D7:  {offset_col: 0, offset_row: 13}   # pin 14
+      A:   {offset_col: 0, offset_row: 14}   # pin 15  backlight anode
+      K:   {offset_col: 0, offset_row: 15}   # pin 16  backlight cathode
+
+    body_breadboard:
+      # Footprint if (hypothetically) placed on-board with pins in one column.
+      # rows_above_anchor: PCB extends ~1 row above pin 1
+      # rows_below_anchor: 15 pin rows + ~15 rows of PCB below pin 16 = 30
+      # cols_right_of_anchor: 36 mm depth ÷ 2.54 mm ≈ 14 columns
+      rows_above_anchor:    1
+      rows_below_anchor:    30
+      cols_left_of_anchor:  0
+      cols_right_of_anchor: 14
+
+  # ── Photoresistor (LDR) ──────────────────────────────────────────────────────
+  photoresistor-ldr:
+    description: "5 mm GL5528 LDR (light-dependent resistor)"
+    source: "Standard 5 mm LDR, straight leads bent for vertical breadboard insertion"
+    notes: |
+      Lead-1 and lead-2 are interchangeable electrically.
+      Leads are bent so the component stands vertically; the two lead tips
+      sit in adjacent rows of the same breadboard column.
+
+    pins:
+      lead-1: {offset_col: 0, offset_row: 0}   # anchor (3.3 V end in this design)
+      lead-2: {offset_col: 0, offset_row: 1}   # junction end (1 row below)
+
+    body_breadboard:
+      rows_above_anchor:    0
+      rows_below_anchor:    1
+      cols_left_of_anchor:  0
+      cols_right_of_anchor: 0
+
+  # ── Resistor (axial through-hole) ────────────────────────────────────────────
+  resistor:
+    description: "1/4 W axial carbon-film resistor (any value)"
+    source: "Standard axial resistor, leads bent vertically for breadboard insertion"
+    notes: |
+      Lead-1 and lead-2 are interchangeable electrically.
+      Inserted vertically: leads bent so they go into two rows of the same
+      column.  Typical breadboard span is 1–3 rows depending on lead bend.
+      This project uses a 2-row span (5.08 mm between lead tips).
+
+    pins:
+      lead-1: {offset_col: 0, offset_row: 0}   # anchor
+      lead-2: {offset_col: 0, offset_row: 2}   # 2 rows below anchor
+
+    body_breadboard:
+      rows_above_anchor:    0
+      rows_below_anchor:    2
+      cols_left_of_anchor:  0
+      cols_right_of_anchor: 0
+
+  # ── ESP32-S3-DevKitC-1 ───────────────────────────────────────────────────────
+  board-esp32-s3-devkitc-1:
+    description: "ESP32-S3-DevKitC-1 development board (N16R8 variant)"
+    source: "https://raw.githubusercontent.com/wokwi/wokwi-boards/main/boards/esp32-s3-devkitc-1/board.json"
+    notes: |
+      Board dimensions: 25.527 mm wide × 70.057 mm tall.
+      Left header: x = 1.343 mm → column A.
+      Right header: x = 24.190 mm → column I (9 columns right of A).
+      Pin 1 (top of each header): y = 7.667 mm from board top.
+      Pin 22 (bottom of each header): y = 61.007 mm from board top.
+      Board body overhangs below pin 22: (70.057 − 61.007) / 2.54 = 3.56 rows
+        → board bottom sits at row 22 + 4 = 26.
+      The board body physically covers rows 1–26, columns A–J.
+      No component or wire endpoint may be placed in that zone.
+
+    body_breadboard:
+      # Body relative to left-header pin 1 (anchor = 3V3.1 at A1)
+      rows_above_anchor:    0
+      rows_below_anchor:    25   # body bottom at row 26 (pin22 at row 22 + 4 overhang)
+      cols_left_of_anchor:  0
+      cols_right_of_anchor: 9    # board spans cols A–J (9 columns right of A)

@@ -201,9 +201,58 @@ grep '"pct"' sim.log
 
 Parse the log. Assert that readings change as lux changes. If the sensor always reads 0%, the ADC is floating. If it never changes, the wiring is wrong. The AI fixes the specific identified problem and returns to Step 6.
 
-### Step 11 — Assembly instructions
+### Step 3.5 — Build the physical component library
 
-Only produced after all gates pass. At this point the circuit has been verified in simulation and the instructions are trustworthy.
+Before writing `breadboard.yaml`, every component type must have an entry in
+`parts_library.yaml` with its exact body dimensions and pin-layout offsets.
+The AI fetches each component's datasheet online (once) and records:
+
+- Body dimensions in mm (width × height)
+- Pin count and arrangement type (e.g., "2+1" for the ELEGOO potentiometer)
+- Exact pin-to-pin spacing
+- Whether the component is `external_only` (too large to place on a standard
+  breadboard alongside an ESP32-S3-DevKitC-1)
+
+The library is **cached** — the AI only fetches a component's specs once and
+commits the result to `parts_library.yaml`.  No network access is needed for
+subsequent runs.
+
+### Step 11 — Assembly instructions (three sub-steps)
+
+#### 11a — Write breadboard.yaml
+
+A machine-readable layout file specifying every component placement and every
+jumper wire.  Each component has a `type:` field matching `parts_library.yaml`.
+Components whose type is `external_only: true` are declared in
+`external_components:` instead of `components:`, with wire endpoints expressed
+as `ext:id:PIN`.
+
+#### 11b — Run the breadboard validator
+
+```bash
+python3 breadboard_validator.py breadboard.yaml
+```
+
+The validator catches five classes of physical error:
+
+| Check | What it catches |
+|-------|----------------|
+| Hole conflict | Two pins assigned to the same hole |
+| Wire in occupied hole | A jumper endpoint lands on a component pin |
+| Pin layout mismatch | Declared pin positions don't match library spacing |
+| Body footprint overlap | Full PCB body (from library) overlaps another component |
+| External-only violation | A too-large component is placed on-board |
+
+The validator uses **library-derived body footprints** rather than the
+bounding box of pin holes — so an LCD module whose PCB extends 14 columns and
+30 rows beyond its pins will be caught, even if only the pins were declared.
+
+Zero errors required before proceeding.
+
+#### 11c — Generate assembly.md
+
+Only produced after 11b passes.  Because the layout was validated, every hole
+reference in assembly.md is provably unoccupied and physically accessible.
 
 ---
 
@@ -211,28 +260,34 @@ Only produced after all gates pass. At this point the circuit has been verified 
 
 ```
 .
-├── README.md               # This file
-├── DEPENDENCIES.md         # Tools, libraries, and services required
-├── COMPONENTS.md           # Available physical hardware components
-├── CIRCUIT_SPEC.md         # What this circuit must do (functional requirements)
-├── WORKFLOW.md             # AI agent workflow prompt (copy into agent context)
-├── WOKWI_PARTS.md          # Physical component → Wokwi simulation part mapping
-├── platformio.ini          # PlatformIO build configuration
-├── wokwi.toml              # Wokwi simulation configuration
-├── diagram.json            # Wokwi circuit diagram
-├── scenario.yaml           # Automated simulation test scenario
+├── README.md                  # This file
+├── DEPENDENCIES.md            # Tools, libraries, and services required
+├── COMPONENTS.md              # Available physical hardware components
+├── CIRCUIT_SPEC.md            # What this circuit must do (functional requirements)
+├── WORKFLOW.md                # AI agent workflow prompt (copy into agent context)
+├── WOKWI_PARTS.md             # Physical component → Wokwi simulation part mapping
+├── parts_library.yaml         # Physical component specs (body size, pin layout)
+├── breadboard_validator.py    # Physical-layout constraint checker (run locally)
+├── breadboard.yaml            # Machine-readable breadboard placement + wiring
+├── assembly.md                # Human-readable step-by-step build instructions
+├── platformio.ini             # PlatformIO build configuration
+├── wokwi.toml                 # Wokwi simulation configuration
+├── diagram.json               # Wokwi circuit diagram
+├── scenario.yaml              # Automated simulation test scenario
 └── src/
-    └── main.cpp            # ESP32-S3 Arduino firmware
+    └── main.cpp               # ESP32-S3 Arduino firmware
 ```
 
 ### Key file relationships
 
 ```
-CIRCUIT_SPEC.md ──► drives ──► diagram.json + src/main.cpp
-COMPONENTS.md   ──► constrains ──► diagram.json parts
-WOKWI_PARTS.md  ──► maps to ──► diagram.json part types + pin names
-scenario.yaml   ──► tests ──► src/main.cpp serial output
-WORKFLOW.md     ──► instructs ──► AI agent (Claude Code)
+CIRCUIT_SPEC.md    ──► drives ──► diagram.json + src/main.cpp
+COMPONENTS.md      ──► constrains ──► diagram.json parts
+WOKWI_PARTS.md     ──► maps to ──► diagram.json part types + pin names
+scenario.yaml      ──► tests ──► src/main.cpp serial output
+parts_library.yaml ──► validates ──► breadboard.yaml component types + body sizes
+breadboard.yaml    ──► drives ──► assembly.md (generated after validation)
+WORKFLOW.md        ──► instructs ──► AI agent (Claude Code)
 ```
 
 ---
@@ -457,9 +512,24 @@ after lux=10: pct < 20
 
 This requires a script that parses the JSON from `sim.log` and applies numeric assertions, not just text matching.
 
-**6. Physical assembly is unverified**
+**6. Physical layout validation closes one important gap**
 
-The workflow produces verified simulated behaviour, but physical assembly can fail in ways simulation doesn't catch: bad solder joints, pin swaps, voltage level incompatibilities (LCD1602 is rated 5V; running at 3.3V is marginal), breadboard contact issues, and power supply noise. The assembly instructions are only as good as the simulation model.
+Assembly instructions used to contain hallucinated hole references: wires
+directed into holes already occupied by component pins, and components placed
+under the ESP32-S3 board body.  The addition of `parts_library.yaml` +
+`breadboard_validator.py` closes this class of error:
+
+- The validator knows the real body size of every component (from datasheet
+  specs cached in `parts_library.yaml`) and checks full body overlap.
+- The validator knows each component's pin layout and checks that declared hole
+  positions match the physical spacing.
+- Components too large to place on the breadboard (e.g., LCD1602A) are flagged
+  `external_only` and must be declared in `external_components:` — attempting
+  to place them on-board is a validator error.
+
+What the validator still cannot catch: bad solder joints, pin swaps during
+assembly, voltage level incompatibilities (LCD1602 is rated 5V; running at
+3.3V is marginal), breadboard contact issues, and power supply noise.
 
 **7. Wokwi free tier quota**
 
