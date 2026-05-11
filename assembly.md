@@ -1,313 +1,350 @@
 # Assembly Instructions: Ambient Light Sensor with LCD Display
 
-This guide walks you through building the circuit on a breadboard from scratch. You do not need any prior electronics experience. Read each step carefully, carry it out, then move to the next. Do not skip steps or work ahead.
+> **This document was generated from a validated breadboard.yaml layout.**
+> Every hole reference has been checked by `breadboard_validator.py` to confirm
+> it is unoccupied and physically accessible before these instructions were written.
 
-Before you touch any component, read through the whole document once so you know what to expect.
+Read through this document once before touching anything. Then work through each
+step in order. Do not skip steps or work ahead.
 
 ---
 
 ## What You Are Building
 
 An ambient light sensor that:
-- Reads the brightness in the room using a photoresistor (a small disc-shaped component that changes resistance depending on how much light hits it)
-- Displays the current light level as a percentage on a small character display (0% = very dark, 100% = very bright)
+- Reads the brightness in the room using a photoresistor (a small disc-shaped component
+  whose electrical resistance drops when light hits it)
+- Displays the current level as a percentage on a character display (0% = dark, 100% = bright)
 - Updates the reading once per second
 
 ---
 
 ## Parts List
 
-Gather every item below and lay it on your desk before you start. Do not substitute components.
+Gather every item before you start.
 
-| # | Component | Quantity | What it looks like |
-|---|-----------|----------|--------------------|
-| 1 | ESP32-S3 DevKitC-1 (N16R8) development board | 1 | Rectangular black PCB with a USB-C port, two rows of metal pins on the long sides |
-| 2 | LCD1602 display module — 16×2 characters, 16-pin single-row header | 1 | Rectangular green or blue PCB with a rectangular window showing two rows of character cells |
-| 3 | Breadboard-compatible potentiometer, 10K ohm | 1 | A small component with a rotatable shaft and three pins underneath |
-| 4 | Photoresistor (LDR — Light Dependent Resistor) | 1 | A small disc with a wavy line pattern on its face, two flexible metal leads |
-| 5 | Resistor, 10K ohm — colour bands: brown, black, orange, gold | 1 | A small cylinder with wire leads and coloured stripes |
-| 6 | Full-size solderless breadboard — 830 points | 1 | Rectangular plastic board covered in small holes, with red/blue rails along the edges |
-| 7 | Jumper wires (male-to-male, pre-cut) — assorted colours | ≈ 20 | Short wires with a pin at each end. Red, black, blue, green, yellow, white, purple, orange |
-| 8 | USB-C cable | 1 | To connect the ESP32 to your computer |
-| 9 | Computer with the firmware already loaded onto the ESP32 | 1 | See WORKFLOW.md for instructions |
+| # | Component | Qty | Identifying features |
+|---|-----------|-----|----------------------|
+| 1 | ESP32-S3 DevKitC-1 (N16R8) | 1 | Black PCB, USB-C port, two rows of pins on the long sides |
+| 2 | LCD1602 display — 16×2 characters, 16-pin single-row header | 1 | Green or blue PCB with a rectangular display window |
+| 3 | Potentiometer, 10K ohm, breadboard-compatible | 1 | Small body with a rotatable shaft, three pins underneath |
+| 4 | Photoresistor (LDR) | 1 | Small disc with a wavy line pattern, two flexible metal leads |
+| 5 | Resistor, 10K ohm — bands: brown-black-orange-gold | 1 | Small cylinder with wire leads |
+| 6 | Full-size solderless breadboard — 830 points | 1 | 63 rows, columns A–J, power rails top and bottom |
+| 7 | Jumper wires, male-to-male, assorted colours | ≈ 20 | Red, black, blue, green, yellow, white, purple, orange |
+| 8 | USB-C cable | 1 | To connect ESP32 to your computer |
+| 9 | Computer with firmware already flashed onto the ESP32 | 1 | See WORKFLOW.md |
 
-> ⚠️ **Voltage warning:** The ESP32-S3 uses 3.3 V logic. Never connect any 5 V signal to its GPIO pins — this will permanently damage the chip. All signals in this circuit are 3.3 V.
+> ⚠️ **3.3 V logic only.** The ESP32-S3 is damaged by 5 V on its GPIO pins.
+> Every connection in this circuit operates at 3.3 V.
 
 ---
 
 ## Understanding the Breadboard
 
-A full-size breadboard is a grid of small holes (sockets) arranged so that you can connect components and wires without soldering. Before assembling anything, understand how electricity flows through it.
+### Hole coordinates
 
-### Columns and Rows
+Every hole is named **ColumnRow** — the column letter followed by the row number.
 
-The main grid has:
-- **63 numbered rows** — labelled 1 (top) to 63 (bottom) along the side.
-- **10 lettered columns** — A, B, C, D, E on the LEFT side of a centre gap, and F, G, H, I, J on the RIGHT side of that gap.
+- Columns **A–E** are on the LEFT side of the centre gap.
+- Columns **F–J** are on the RIGHT side of the centre gap.
+- Rows are numbered **1** (top) to **63** (bottom).
 
-A hole is identified by its column letter followed by its row number. Examples: **A1** (column A, row 1), **J22** (column J, row 22), **D35** (column D, row 35).
+Examples: **B1** = column B row 1, **D41** = column D row 41, **J4** = column J row 4.
 
 ### Which holes are connected?
 
-**Key rule:** All five holes in the same row-half are electrically connected to each other.
-- A5, B5, C5, D5, E5 are ALL connected — pushing a wire into any of them reaches the others.
-- F5, G5, H5, I5, J5 are ALL connected — but NOT connected to A5–E5.
-- The centre gap separates the two halves. Holes on opposite sides of the gap in the same row are NOT connected unless you run a wire between them.
+All five holes in the same row-half share one electrical node:
+- **A5, B5, C5, D5, E5** are all connected to each other.
+- **F5, G5, H5, I5, J5** are all connected to each other.
+- The two halves of row 5 are **not** connected unless you run a wire between them.
 
-### Power Rails
+### Power rails
 
-The top and bottom edges each have two long horizontal strips of holes labelled **(+)** and **(−)**. Every hole in the (+) strip is connected to every other hole in the (+) strip. Same for (−). We will use these to distribute 3.3 V (positive) and Ground (negative) to all the components without running individual wires to each one.
+The (+) and (−) strips at the top edge run the full width of the board:
+- **(+) rail = 3.3 V**
+- **(−) rail = Ground (0 V)**
 
-In this build:
-- **(+) top rail = 3.3 V**
-- **(−) top rail = Ground (0 V)**
+### The one-hole-one-pin rule
+
+**A breadboard hole accepts exactly one pin or wire at a time.** If a component lead is
+already in a hole, a jumper wire must go into a *different* hole in the same row-half —
+which is electrically identical but physically free.
 
 ---
 
 ## ESP32-S3 Pin Reference
 
-The ESP32-S3 DevKitC-1 board has two rows of 22 header pins — one row on each long side. When the board is seated on the breadboard (USB-C connector at the top), the left header occupies **column A** and the right header occupies **column I**, rows 1–22.
+Place the ESP32 with the USB-C connector at the top. The left header occupies
+**column A** and the right header occupies **column I**, rows 1–22.
 
-> ⚠️ **Important:** The GPIO numbers printed on the board do NOT correspond to row numbers. For example, GPIO 8 is at row 12, and GPIO 9 is at row 15. Always use the table below — do not guess from the GPIO number.
+> ⚠️ **GPIO numbers do NOT equal row numbers.** GPIO 8 is at row 12 (A12), and
+> GPIO 9 is at row 15 (A15). Always use the table below — never guess from the number.
 
 ### Left header — column A, rows 1–22
 
-| Hole | Signal | Used? |
-|------|--------|-------|
-| A1  | 3.3 V | ✅ → (+) power rail |
+| Hole | Signal | Role in this circuit |
+|------|--------|----------------------|
+| A1  | 3.3 V | ✅ Power (wire uses **B1**) |
 | A2  | 3.3 V | — |
-| A3  | RST (Reset) | — |
-| **A4**  | **GPIO 4** | ✅ → LCD RS (pin 4) |
-| **A5**  | **GPIO 5** | ✅ → LCD Enable (pin 6) |
-| **A6**  | **GPIO 6** | ✅ → LCD D4 (pin 11) |
-| **A7**  | **GPIO 7** | ✅ → LCD D5 (pin 12) |
+| A3  | RST | — |
+| **A4**  | **GPIO 4** | ✅ → LCD RS (pin 4) — wire uses **B4** |
+| **A5**  | **GPIO 5** | ✅ → LCD Enable (pin 6) — wire uses **B5** |
+| **A6**  | **GPIO 6** | ✅ → LCD D4 (pin 11) — wire uses **B6** |
+| **A7**  | **GPIO 7** | ✅ → LCD D5 (pin 12) — wire uses **B7** |
 | A8  | GPIO 15 | — |
 | A9  | GPIO 16 | — |
 | A10 | GPIO 17 | — |
 | A11 | GPIO 18 | — |
-| **A12** | **GPIO 8** | ✅ → LCD D6 (pin 13) — note: row 12, not row 8 |
+| **A12** | **GPIO 8** | ✅ → LCD D6 (pin 13) — wire uses **B12** — row 12, not row 8 |
 | A13 | GPIO 3 | — |
 | A14 | GPIO 46 | — |
-| **A15** | **GPIO 9** | ✅ → LCD D7 (pin 14) — note: row 15, not row 9 |
+| **A15** | **GPIO 9** | ✅ → LCD D7 (pin 14) — wire uses **B15** — row 15, not row 9 |
 | A16 | GPIO 10 | — |
 | A17 | GPIO 11 | — |
 | A18 | GPIO 12 | — |
 | A19 | GPIO 13 | — |
 | A20 | GPIO 14 | — |
 | A21 | 5 V | — |
-| A22 | GND | ✅ → (−) power rail |
+| A22 | GND | ✅ Power (wire uses **B22**) |
 
 ### Right header — column I, rows 1–22
 
-| Hole | Signal | Used? |
-|------|--------|-------|
-| **I1**  | **GND** | ✅ → (−) power rail |
-| I2  | TX (GPIO 43) | — |
-| I3  | RX (GPIO 44) | — |
-| **I4**  | **GPIO 1** | ✅ → LDR junction (analogue input) |
+| Hole | Signal | Role in this circuit |
+|------|--------|----------------------|
+| **I1**  | GND | ✅ Power (wire uses **J1**) |
+| I2  | TX | — |
+| I3  | RX | — |
+| **I4**  | **GPIO 1** | ✅ → LDR junction (ADC) — wire uses **J4** |
 | I5  | GPIO 2 | — |
-| I6  | GPIO 42 | — |
-| I7  | GPIO 41 | — |
-| I8  | GPIO 40 | — |
-| I9  | GPIO 39 | — |
-| I10 | GPIO 38 | — |
-| I11 | GPIO 37 | — |
-| I12 | GPIO 36 | — |
-| I13 | GPIO 35 | — |
-| I14 | GPIO 0 (BOOT) | — |
-| I15 | GPIO 45 | — |
-| I16 | GPIO 48 | — |
-| I17 | GPIO 47 | — |
-| I18 | GPIO 21 | — |
-| I19 | GPIO 20 | — |
-| I20 | GPIO 19 | — |
-| I21 | GND | — |
-| I22 | GND | — |
+| I6–I22 | (other GPIO / GND) | — |
 
 ---
 
 ## Breadboard Layout Overview
 
-Here is where every component will sit before you start wiring:
-
 ```
-Top power rail ──────────────────────  (+) = 3.3 V   (−) = GND
-
-Rows  1–22    ESP32-S3 DevKitC-1
-              Left header  → column A, rows 1–22
-              Right header → column I, rows 1–22
-
-Rows 24–26    LDR + 10K resistor voltage divider (right half, column H)
-              H24 = LDR top lead  →  H25 = junction  →  H26 = resistor bottom lead
-
-Rows 29–31    Potentiometer (left half, column C)
-              C29 = GND pin   C30 = wiper   C31 = VCC pin
-
-Rows 33–48    LCD1602 display (left half, column E)
-              E33 = LCD pin 1 (VSS)   …   E48 = LCD pin 16 (K)
+Top power rail:  (+) = 3.3 V     (−) = GND
+─────────────────────────────────────────────────────────────────
+Rows  1–22   ESP32-S3 DevKitC-1
+             Left header  → column A, rows 1–22
+             Right header → column I, rows 1–22
+─────────────────────────────────────────────────────────────────
+Rows  1–26   ← ESP32 BOARD BODY (PCB overhangs this zone)
+             Nothing else may be placed in rows 1–26
+─────────────────────────────────────────────────────────────────
+Rows 28–29   LDR photoresistor        col H  (H28 = 3V3, H29 = junction)
+Rows 29–31   10K resistor             col G  (G29 = junction, G31 = GND)
+─────────────────────────────────────────────────────────────────
+Rows 33–35   Potentiometer            col C  (C33 = GND, C34 = wiper, C35 = VCC)
+─────────────────────────────────────────────────────────────────
+Rows 38–53   LCD1602 display          col E  (E38 = pin 1, E53 = pin 16)
+─────────────────────────────────────────────────────────────────
 ```
 
 ---
 
 ## Step-by-Step Assembly
 
-Work through each lettered part in order. Do not connect the USB-C cable until **Step F2**.
+Do not connect the USB-C cable until **Step F2**.
 
 ---
 
 ### Part A — Place the ESP32 Board
 
-*Goal: Seat the microcontroller so all its pins are accessible in the breadboard grid.*
+*Goal: Seat the microcontroller so all 44 header pins are accessible in the breadboard grid.*
 
-**Step A1.** Orient the breadboard with row 1 at the top and the power rails running along the top and bottom edges.
+**Step A1.** Orient the breadboard with row 1 at the top and the power rails along the
+top and bottom edges.
 
-**Step A2.** Pick up the ESP32-S3 DevKitC-1 board. Rotate it so the USB-C connector is at the top (pointing upward, away from the breadboard body).
+**Step A2.** Pick up the ESP32 board. Rotate it so the USB-C connector faces upward
+(away from the breadboard body).
 
-**Step A3.** Hold the board over the breadboard and align the left-side pins over **column A** and the right-side pins over **column I**. Both sets of pins should start at **row 1**.
+**Step A3.** Align the left-side pins over **column A, row 1** and the right-side pins
+over **column I, row 1**. Press the board down evenly until all pins click into place.
+The board body will bridge the centre gap.
 
-**Step A4.** Press the board steadily and evenly downward until all pins click firmly into the holes. The board body will bridge the centre gap.
+> **Check:** Left top pin = **A1**, left bottom = **A22** (count 22 pins).
+> Right top = **I1**, right bottom = **I22** (22 pins). If the count is off, lift and reseat.
 
-> **Check:** Look at the left side. The top pin should be in **A1** and the bottom pin in **A22**. Count them — you should count 22 pins. Do the same for the right side: **I1** at the top, **I22** at the bottom, 22 pins. If the count is off, the board may be shifted — pull it out and reseat it.
+> **Note on the board body:** The ESP32 PCB extends approximately 3–4 rows below pin A22/I22.
+> This means rows 23–26 are physically underneath the board. Those holes are inaccessible
+> — the remaining components are placed below row 27.
 
 ---
 
 ### Part B — Set Up the Power Rails
 
-*Goal: Create a shared 3.3 V bus and Ground bus that every other component will connect to. This avoids running individual power wires to each component from the ESP32.*
+*Goal: Establish a 3.3 V bus and a Ground bus that all components will connect to.*
 
-**Step B1.** Take a **red** jumper wire. Insert one end into **A1** (ESP32 3.3 V, left header pin 1) and the other end into any hole in the **(+)** row of the top power rail.
+> Why not wire directly to the ESP32 pins? The power rail lets multiple components share
+> the same supply without cramming wires into the same row as the ESP32.
 
-**Step B2.** Take a **black** jumper wire. Insert one end into **A22** (ESP32 GND, left header pin 22) and the other end into any hole in the **(−)** row of the top power rail.
+> **Remember the one-hole-one-pin rule:** pins A1, A22, and I1 are already occupied by
+> the ESP32. The wires in this section use the adjacent holes B1, B22, and J1 — same
+> electrical node, free hole.
 
-**Step B3.** Take a second **black** jumper wire. Insert one end into **I1** (ESP32 GND, right header pin 1) and the other end into any hole in the **(−)** row of the top power rail.
+**Step B1.** Take a **red** jumper wire. Insert one end into **B1** (same row as A1 =
+ESP32 3.3 V) and the other end into the **(+)** row of the top power rail.
 
-> After these three steps, every hole in the (+) rail carries 3.3 V, and every hole in the (−) rail is Ground. All future power and ground connections go to these rails.
+**Step B2.** Take a **black** jumper wire. Insert one end into **B22** (same row as A22 =
+ESP32 GND, left header) and the other end into the **(−)** rail.
+
+**Step B3.** Take a second **black** jumper wire. Insert one end into **J1** (same row as
+I1 = ESP32 GND, right header) and the other end into the **(−)** rail.
+
+> After these three steps, the (+) rail is 3.3 V and the (−) rail is Ground.
 
 ---
 
 ### Part C — Light Sensor (LDR Voltage Divider)
 
-*Goal: Create a circuit whose output voltage rises when light is bright and falls when it is dark. The ESP32 reads this voltage on its analogue input (GPIO 1, hole I4) and converts it to a 0–100% reading.*
+*Goal: Build a circuit whose output voltage rises when bright and falls when dark.
+The ESP32 reads this voltage on GPIO 1 (hole I4) and maps it to 0–100%.*
 
-**How it works:** A photoresistor (LDR) is paired with a fixed 10K resistor to form a voltage divider:
+A photoresistor (LDR) and a fixed 10K resistor form a voltage divider:
 
 ```
-  3.3 V ──[LDR]──┬──[10K resistor]── GND
-                 │
-               GPIO 1
-              (reads voltage here)
+  3.3 V ──[ LDR ]──┬──[ 10K resistor ]── GND
+                   │
+                 GPIO 1  (reads voltage here)
 ```
 
-When bright, the LDR's resistance drops, and the junction voltage rises toward 3.3 V → higher reading → higher percentage. When dark, the LDR's resistance rises → junction voltage falls → lower percentage.
+When bright, the LDR's resistance falls, pulling the junction voltage toward 3.3 V →
+higher ADC reading → higher percentage. When dark, the LDR's resistance rises →
+junction voltage falls → lower percentage.
 
-The three holes H24, H25, H26 will carry these voltages:
-- **H24** — 3.3 V (top of LDR)
-- **H25** — junction voltage (bottom of LDR / top of resistor) — the reading point
-- **H26** — Ground (bottom of resistor)
+The LDR occupies column H (rows 28–29) and the resistor occupies column G (rows 29–31).
+They share the **junction node** at row 29: H29 and G29 are in the same row-half (right
+half), so they are electrically connected even though they are in different holes.
 
-**Step C1.** Take the **photoresistor (LDR)**. Insert one lead into hole **H24** and the other lead into hole **H25**. The LDR has no polarity — either lead can go into either hole.
+**Step C1.** Take the **LDR**. Insert one lead into **H28** and the other into **H29**.
+The LDR has no polarity — either lead can go into either hole.
 
-**Step C2.** Take the **10K ohm resistor** (brown-black-orange-gold bands). Insert one lead into hole **H25** and the other lead into hole **H26**. The resistor has no polarity.
+**Step C2.** Take the **10K resistor** (brown-black-orange-gold). Insert one lead into
+**G29** and the other into **G31**. No polarity.
 
-> **Check:** Holes H24, H25, and H26 should now each contain one component lead. H25 contains two leads — one from the LDR and one from the resistor. This shared point (H25) is the junction that the ESP32 will measure.
+> **Check:** H29 and G29 are both occupied (one by the LDR, one by the resistor).
+> H29 and G29 are in the same row-half (both are in F–J), so they are electrically
+> connected — this is the junction node. Row 30 is deliberately empty.
 
-**Step C3.** Take a **red** jumper wire. Insert one end into **G24** (same row as H24, same electrical node as the LDR's top lead) and the other end into the **(+)** rail. This supplies 3.3 V to the top of the voltage divider.
+**Step C3.** Take a **red** wire. Insert one end into **F28** (same row-half as H28,
+the 3.3 V end of the LDR) and the other end into the **(+)** rail.
 
-**Step C4.** Take a **black** jumper wire. Insert one end into **G26** (same row as H26, same electrical node as the resistor's bottom lead) and the other end into the **(−)** rail. This connects the bottom of the divider to Ground.
+**Step C4.** Take a **black** wire. Insert one end into **F31** (same row-half as G31,
+the GND end of the resistor) and the other end into the **(−)** rail.
 
-**Step C5.** Take a **yellow** jumper wire. Insert one end into **J25** (same row as H25 — the junction) and the other end into **I4** (ESP32 GPIO 1, analogue input). This carries the light-level voltage to the chip.
+**Step C5.** Take a **yellow** wire. Insert one end into **F29** (same row-half as H29
+and G29 — the junction node) and the other end into **J4** (same row-half as I4 =
+ESP32 GPIO 1 — I4 is occupied, J4 is the free adjacent hole).
+
+> **How it works:** The yellow wire carries the junction voltage to GPIO 1. Covering the
+> LDR raises its resistance → junction falls → lower reading → lower percentage. This is
+> the physically correct behaviour. If the percentage goes the wrong way, swap the LDR
+> leads: remove it and swap H28 ↔ H29.
 
 ---
 
 ### Part D — Potentiometer (LCD Contrast Adjustment)
 
-*Goal: Wire a variable resistor so you can turn a knob to adjust the display contrast. Without this, characters may be invisible even if the display is powered.*
+*Goal: Wire a knob so you can adjust display contrast. Without this, characters may be
+invisible even when the display is powered.*
 
-A potentiometer has three pins. The two outer pins connect to GND and 3.3 V. The middle pin (the wiper) outputs a variable voltage between those two extremes — turning the knob changes the voltage.
+The potentiometer has three pins. The outer two connect to GND and 3.3 V. The centre
+pin (wiper) outputs a variable voltage that controls the LCD's character darkness.
 
-**Step D1.** Take the **potentiometer**. Identify its three pins. The centre pin is the wiper; the outer two pins are the GND and VCC ends. Insert the three pins into holes **C29** (GND end), **C30** (wiper), and **C31** (VCC end). The potentiometer body sits above the breadboard.
+**Step D1.** Take the **potentiometer**. Insert its three pins into **C33** (GND end),
+**C34** (wiper/centre), and **C35** (VCC end). The body sits above the breadboard.
 
-> If your potentiometer has a rotary shaft on top, the wiper is the centre pin when viewed from the front.
+> If your potentiometer has a rotary shaft, the centre pin is the wiper.
 
-**Step D2.** Take a **black** jumper wire. Insert one end into **B29** (same row as C29, the GND end of the potentiometer) and the other end into the **(−)** rail.
+**Step D2.** Take a **black** wire. Insert one end into **B33** (same row as C33, the
+GND end) and the other into the **(−)** rail.
 
-**Step D3.** Take a **red** jumper wire. Insert one end into **B31** (same row as C31, the VCC end) and the other end into the **(+)** rail.
+**Step D3.** Take a **red** wire. Insert one end into **B35** (same row as C35, the VCC
+end) and the other into the **(+)** rail.
 
-**Step D4.** Take a **green** jumper wire. Insert one end into **C30** (the wiper) and the other end into **D35**. Hole D35 is in the same row as E35, which will be LCD contrast input (pin 3) once the display is inserted in the next step.
+**Step D4.** Take a **green** wire. Insert one end into **B34** (same row as C34 — the
+wiper; C34 is occupied so use the free adjacent hole B34) and the other end into **D40**
+(same row as E40, which will be the LCD contrast pin once the display is inserted).
 
 ---
 
 ### Part E — LCD1602 Display
 
-*Goal: Seat the 16×2 display and wire all its control, data, and power pins to the ESP32 and power rails.*
+*Goal: Seat the display and wire all 16 pins.*
 
-The LCD1602 uses 4-bit mode, which means:
-- Pins 1–6 handle power, ground, contrast, and control signals.
-- Pins 7–10 (D0–D3) are unused — leave them empty.
-- Pins 11–14 (D4–D7) carry the 4 data bits.
-- Pins 15–16 control the backlight.
+The LCD uses 4-bit mode: pins 7–10 (D0–D3) are unused and left empty. Pins 11–14
+(D4–D7) carry data. Pins 1–6 handle power and control. Pins 15–16 control the backlight.
 
-**Step E1.** Pick up the LCD1602 display. Identify the 16-pin header along one long edge.
+**Step E1.** Pick up the LCD1602. Identify the 16-pin header along one long edge.
 
-**Step E2.** Orient the display so pin 1 is at the top and the display screen faces you. Align pin 1 over hole **E33** and pin 16 over hole **E48**. Press the display firmly downward until all 16 pins are seated. The display body will extend to the left.
+**Step E2.** Orient the display with pin 1 at the top, screen facing you. Align pin 1
+over **E38** and pin 16 over **E53**. Press down until all 16 pins are seated. The
+display body extends to the left.
 
-> **Check:** Count from E33 to E48 — exactly 16 holes. Pin 1 is labelled VSS (Ground) and pin 16 is labelled K (backlight negative). If your LCD has a label or the pins are numbered on the PCB, verify pin 1 is in E33.
+> **Check:** Count from E38 to E53 — exactly 16 holes. Pin 1 is labelled VSS (GND),
+> pin 16 is labelled K (backlight −). Verify pin 1 is at E38.
 
-Once the LCD is seated, the pin-to-hole mapping is:
+LCD pin assignments once seated:
 
-| LCD Pin | Name | Hole | Connect to |
+| LCD pin | Name | Hole | Connection |
 |---------|------|------|------------|
-| 1 | VSS (GND) | E33 | (−) rail |
-| 2 | VDD (3.3 V) | E34 | (+) rail |
-| 3 | V0 (contrast) | E35 | Potentiometer wiper — already wired in Step D4 |
-| 4 | RS | E36 | GPIO 4 (A4) |
-| 5 | RW | E37 | (−) rail |
-| 6 | E (Enable) | E38 | GPIO 5 (A5) |
-| 7–10 | D0–D3 | E39–E42 | **Leave empty — not used in 4-bit mode** |
-| 11 | D4 | E43 | GPIO 6 (A6) |
-| 12 | D5 | E44 | GPIO 7 (A7) |
-| 13 | D6 | E45 | GPIO 8 (A12) |
-| 14 | D7 | E46 | GPIO 9 (A15) |
-| 15 | A (backlight +) | E47 | (+) rail |
-| 16 | K (backlight −) | E48 | (−) rail |
+| 1 | VSS (GND) | E38 | (−) rail |
+| 2 | VDD (3.3V) | E39 | (+) rail |
+| 3 | V0 (contrast) | E40 | Potentiometer wiper — wired in Step D4 |
+| 4 | RS | E41 | GPIO 4 |
+| 5 | RW | E42 | (−) rail (write-only) |
+| 6 | E (Enable) | E43 | GPIO 5 |
+| 7–10 | D0–D3 | E44–E47 | **Leave empty** (4-bit mode) |
+| 11 | D4 | E48 | GPIO 6 |
+| 12 | D5 | E49 | GPIO 7 |
+| 13 | D6 | E50 | GPIO 8 |
+| 14 | D7 | E51 | GPIO 9 |
+| 15 | A (backlight +) | E52 | (+) rail |
+| 16 | K (backlight −) | E53 | (−) rail |
 
-Now connect each pin in order:
+Now run the wires. All LCD pins are in column E; the wires all use column D (same row,
+free hole).
 
-**Step E3.** LCD GND — take a **black** wire, one end into **D33**, other end into **(−)** rail.
+**Step E3.** LCD GND: **black** wire, **D38** → **(−)** rail.
 
-**Step E4.** LCD 3.3 V — take a **red** wire, one end into **D34**, other end into **(+)** rail.
+**Step E4.** LCD 3.3 V: **red** wire, **D39** → **(+)** rail.
 
-*(LCD contrast — E35 — is already connected via the wire you placed in Step D4.)*
+*(Contrast — E40 — already connected by Step D4.)*
 
-**Step E5.** LCD RW to GND — take a **black** wire, one end into **D37**, other end into **(−)** rail. This puts the display permanently in write-only mode (it only receives data, never sends it).
+**Step E5.** LCD RW to GND: **black** wire, **D42** → **(−)** rail. This locks the
+display in write-only mode.
 
-**Step E6.** LCD backlight positive — take a **red** wire, one end into **D47**, other end into **(+)** rail.
+**Step E6.** Backlight positive: **red** wire, **D52** → **(+)** rail.
 
-> **Note:** The backlight is connected directly to 3.3 V without a current-limiting resistor. This is safe for prototyping — most 3.3 V LCD backlights have a forward voltage close to 3.3 V that limits current naturally. For a permanent build, place a 33 Ω resistor in series.
+**Step E7.** Backlight negative: **black** wire, **D53** → **(−)** rail.
 
-**Step E7.** LCD backlight negative — take a **black** wire, one end into **D48**, other end into **(−)** rail.
+> **Backlight note:** The backlight LED is connected directly to 3.3 V. Most 3.3 V LCD
+> backlights have a forward voltage close to 3.3 V, so current is self-limiting. For a
+> permanent build, place a 33 Ω resistor in series with D52.
 
-**Step E8.** RS — data/command select (GPIO 4):
-Take a **blue** wire, one end into **B4** (same row as **A4** = GPIO 4), other end into **D36** (same row as **E36** = LCD RS).
+**Step E8.** GPIO 4 → LCD RS (data/command):
+**blue** wire, **B4** → **D41**.
 
-**Step E9.** Enable — clock signal (GPIO 5):
-Take a **purple** wire, one end into **B5** (same row as **A5** = GPIO 5), other end into **D38** (same row as **E38** = LCD Enable).
+**Step E9.** GPIO 5 → LCD Enable:
+**purple** wire, **B5** → **D43**.
 
-**Step E10.** D4 — data bit 4 (GPIO 6):
-Take an **orange** wire, one end into **B6** (same row as **A6** = GPIO 6), other end into **D43** (same row as **E43** = LCD D4).
+**Step E10.** GPIO 6 → LCD D4:
+**orange** wire, **B6** → **D48**.
 
-**Step E11.** D5 — data bit 5 (GPIO 7):
-Take a **yellow** wire, one end into **B7** (same row as **A7** = GPIO 7), other end into **D44** (same row as **E44** = LCD D5).
+**Step E11.** GPIO 7 → LCD D5:
+**yellow** wire, **B7** → **D49**.
 
-**Step E12.** D6 — data bit 6 (GPIO 8):
-Take a **green** wire, one end into **B12** (same row as **A12** = GPIO 8), other end into **D45** (same row as **E45** = LCD D6).
+**Step E12.** GPIO 8 → LCD D6:
+**green** wire, **B12** → **D50**.
 
-> ⚠️ **Important:** GPIO 8 is at **row 12** of the left header (**A12**), NOT row 8 (**A8**). The ESP32 pin order is not sequential by GPIO number. Always follow the pin table.
+> ⚠️ **GPIO 8 is at row 12 (A12), not row 8.** Use B12 for this wire, not B8.
 
-**Step E13.** D7 — data bit 7 (GPIO 9):
-Take a **white** wire, one end into **B15** (same row as **A15** = GPIO 9), other end into **D46** (same row as **E46** = LCD D7).
+**Step E13.** GPIO 9 → LCD D7:
+**white** wire, **B15** → **D51**.
 
-> ⚠️ **Important:** GPIO 9 is at **row 15** (**A15**), not row 9.
+> ⚠️ **GPIO 9 is at row 15 (A15), not row 9.** Use B15, not B9.
 
 ---
 
@@ -315,63 +352,67 @@ Take a **white** wire, one end into **B15** (same row as **A15** = GPIO 9), othe
 
 *Goal: Verify every connection before applying power, then confirm the circuit works.*
 
-**Step F1.** Before connecting the USB cable, go through the complete wiring table below and tick off every wire:
+**Step F1.** Before connecting the USB cable, tick off every wire in the table below.
+Count as you go — you should have exactly 20 wires.
 
-| # | From | To | Wire colour | Purpose |
-|---|------|----|-------------|---------|
-| 1 | A1 | (+) rail | Red | ESP32 3.3 V → power bus |
-| 2 | A22 | (−) rail | Black | ESP32 GND (left) → ground bus |
-| 3 | I1 | (−) rail | Black | ESP32 GND (right) → ground bus |
-| 4 | (+) rail | G24 | Red | 3.3 V → top of LDR |
-| 5 | G26 | (−) rail | Black | Bottom of 10K resistor → GND |
-| 6 | J25 | I4 | Yellow | LDR junction → GPIO 1 (ADC) |
-| 7 | B29 | (−) rail | Black | Potentiometer GND end |
-| 8 | B31 | (+) rail | Red | Potentiometer 3.3 V end |
-| 9 | C30 | D35 | Green | Potentiometer wiper → LCD contrast |
-| 10 | D33 | (−) rail | Black | LCD VSS → GND |
-| 11 | D34 | (+) rail | Red | LCD VDD → 3.3 V |
-| 12 | D37 | (−) rail | Black | LCD RW → GND (write-only) |
-| 13 | D47 | (+) rail | Red | LCD backlight + |
-| 14 | D48 | (−) rail | Black | LCD backlight − |
-| 15 | B4 | D36 | Blue | GPIO 4 → LCD RS |
-| 16 | B5 | D38 | Purple | GPIO 5 → LCD Enable |
-| 17 | B6 | D43 | Orange | GPIO 6 → LCD D4 |
-| 18 | B7 | D44 | Yellow | GPIO 7 → LCD D5 |
-| 19 | B12 | D45 | Green | GPIO 8 → LCD D6 |
-| 20 | B15 | D46 | White | GPIO 9 → LCD D7 |
+| # | From | To | Colour | Purpose |
+|---|------|----|--------|---------|
+| 1 | B1 | (+) rail | Red | ESP32 3.3 V → power bus |
+| 2 | B22 | (−) rail | Black | ESP32 GND (left) → ground bus |
+| 3 | J1 | (−) rail | Black | ESP32 GND (right) → ground bus |
+| 4 | (+) rail | F28 | Red | 3.3 V → top of LDR |
+| 5 | F31 | (−) rail | Black | Bottom of 10K resistor → GND |
+| 6 | F29 | J4 | Yellow | LDR junction → GPIO 1 (ADC) |
+| 7 | B33 | (−) rail | Black | Potentiometer GND end |
+| 8 | B35 | (+) rail | Red | Potentiometer VCC end |
+| 9 | B34 | D40 | Green | Potentiometer wiper → LCD contrast |
+| 10 | D38 | (−) rail | Black | LCD VSS → GND |
+| 11 | D39 | (+) rail | Red | LCD VDD → 3.3 V |
+| 12 | D42 | (−) rail | Black | LCD RW → GND (write-only) |
+| 13 | D52 | (+) rail | Red | LCD backlight + |
+| 14 | D53 | (−) rail | Black | LCD backlight − |
+| 15 | B4 | D41 | Blue | GPIO 4 → LCD RS |
+| 16 | B5 | D43 | Purple | GPIO 5 → LCD Enable |
+| 17 | B6 | D48 | Orange | GPIO 6 → LCD D4 |
+| 18 | B7 | D49 | Yellow | GPIO 7 → LCD D5 |
+| 19 | B12 | D50 | Green | GPIO 8 → LCD D6 |
+| 20 | B15 | D51 | White | GPIO 9 → LCD D7 |
 
-Also verify:
-- [ ] LDR leads: one in **H24**, one in **H25**
-- [ ] 10K resistor leads: one in **H25**, one in **H26**
-- [ ] Potentiometer pins: **C29**, **C30**, **C31**
-- [ ] LCD 16-pin header: **E33** through **E48**
-- [ ] Holes **E39–E42** (LCD D0–D3) are empty
+Also confirm:
+- [ ] LDR leads in **H28** and **H29**
+- [ ] 10K resistor leads in **G29** and **G31** (row 30 is empty)
+- [ ] Potentiometer pins in **C33**, **C34**, **C35**
+- [ ] LCD 16-pin header spans **E38** (pin 1) through **E53** (pin 16)
+- [ ] Holes **E44–E47** (LCD D0–D3) are empty
 
-**Step F2.** Connect the USB-C cable to the ESP32 board. Connect the other end to your computer. Do not press any buttons on the ESP32.
+**Step F2.** Connect the USB-C cable to the ESP32. Connect the other end to your computer.
 
-**Step F3.** Watch the display. Within 3 seconds, the backlight should illuminate and you should see:
+**Step F3.** The backlight should illuminate within 3 seconds. You will see:
 
 ```
 Light Sensor
 Level: XX%
 ```
 
-The percentage will update once per second.
+The percentage updates once per second.
 
-**Step F4.** If the backlight is on but the display shows only solid black rectangles or is blank, slowly turn the potentiometer knob. The contrast will change as you turn it. Rotate until you see clear black text on a light background.
+**Step F4.** If the backlight is on but the display is blank or shows solid blocks, slowly
+turn the potentiometer knob through its full range. Stop when you can read the text clearly.
 
-**Step F5.** Test the sensor. Cover the photoresistor fully with your hand — the percentage should drop toward 0%. Remove your hand and shine a torch directly at the LDR — the percentage should rise toward 100%.
+**Step F5.** Test the sensor: cover the LDR completely with your hand. The percentage should
+fall toward 0%. Uncover it and shine a torch directly at the disc — the percentage should
+rise toward 100%.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Most likely cause | What to do |
-|---------|-------------------|------------|
-| No backlight, display completely dark | Power wires missing or wrong | Recheck Steps B1–B3, E6, E7. Confirm A1→(+) rail and A22→(−) rail are seated. |
-| Backlight on, display blank/solid blocks | Contrast not adjusted | Turn potentiometer slowly through its full range. Also check Step D4 (C30 → D35). |
-| Display shows text but percentage stuck at 0% | LDR circuit not connected | Recheck Steps C1–C5. Confirm H25 has two leads in it. Confirm J25 → I4. |
-| Percentage always shows 100% | Junction shorted to 3.3 V, or GND wire missing | Recheck G26 → (−) rail (Step C4). Make sure nothing bridges H24 and H26. |
-| Percentage goes DOWN when you shine a light | LDR leads are reversed | Remove the LDR and swap which lead goes into H24 and which into H25. |
-| Firmware boots (serial output) but display shows nothing | Data wires wrong | Recheck Steps E8–E13 against the pin table. Pay attention to GPIO 8 at A12 and GPIO 9 at A15. |
-| Display shows garbled characters | RS or Enable wiring wrong | Recheck E8 (B4 → D36) and E9 (B5 → D38). |
+| Symptom | Most likely cause | Fix |
+|---------|-------------------|-----|
+| No backlight, display completely dark | Power wires missing | Recheck Steps B1–B3, E6, E7 |
+| Backlight on, display blank or solid blocks | Contrast not adjusted | Turn potentiometer through full range; check Step D4 (B34 → D40) |
+| Percentage stuck at 0% and does not change | LDR circuit not connected | Recheck C1–C5; confirm H29 and G29 both have component leads; confirm F29 → J4 |
+| Percentage always at 100% | GND connection of divider missing | Recheck Step C4 (F31 → (−) rail) |
+| Percentage falls when you shine light (inverted) | LDR leads swapped | Remove LDR; swap which lead goes into H28 and H29 |
+| Text appears but is garbled or missing characters | Data wire wrong | Recheck E8–E13 against the table; confirm GPIO 8 uses B12 (not B8) and GPIO 9 uses B15 (not B9) |
+| Backlight on, first row of blocks, second row blank | RS or Enable wiring wrong | Recheck E8 (B4 → D41) and E9 (B5 → D43) |

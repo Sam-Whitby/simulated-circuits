@@ -61,54 +61,67 @@ Your goal:
     Parse sim.log to assert values span the expected range.
     Fix firmware or diagram if assertions fail, then re-run from step 6.
 
-11. Generate assembly.md — step-by-step physical breadboard assembly instructions.
+11. Write breadboard.yaml — the machine-readable physical layout.
 
-    Do NOT produce this file until steps 7–10 have all passed.
+    Do NOT start until steps 7–10 have all passed.
 
-    assembly.md must contain these four sections in order:
+    breadboard.yaml specifies every component placement and every jumper wire using the
+    coordinate system defined in breadboard_validator.py (columns A–J, rows 1–63).
 
-    **Parts List** — every component by name and quantity, including any passive components
-    (resistors, etc.) needed to replace simulation modules with real-world equivalents.
-    Note any voltage constraints.
+    Critical rules for writing breadboard.yaml:
+    - A breadboard hole accepts exactly ONE lead or pin. Two items cannot share a hole.
+    - Every jumper wire endpoint must be in a DIFFERENT hole from any component pin, even
+      if that pin is in the same row-half (i.e. electrically the same node). Use an
+      adjacent column in the same row-half for the wire — e.g. if GPIO4 is at A4, connect
+      the wire to B4 (same node, free hole), NOT A4.
+    - Compute the PCB body bounding box from board.json dimensions:
+        bottom-row = last_pin_row + ceil((board_height - last_pin_y) / 2.54)
+      No component may be placed inside this bounding box.
+    - For the LDR voltage divider, the LDR and 10K resistor share one junction node but
+      must NOT share a hole. Place them in adjacent columns of the same row (e.g. H29
+      and G29) so they are electrically connected without occupying the same hole.
 
-    **Understanding the Breadboard** — briefly explain the coordinate system used throughout
-    the document:
-    - Rows numbered 1–63 (top to bottom)
-    - Columns A–E (left of centre gap), F–J (right of centre gap)
-    - Top power rail: (+) = 3.3 V, (−) = GND
-    - Each hole referenced as ColumnRow, e.g. "A1", "J22"
-    - Explain that holes in the same row-half are electrically connected
+    Derived layout for ESP32-S3-DevKitC-1 (from board.json: height=70.057mm,
+    last pin at y=61.007mm, pin-1 at y=7.667mm, 22 pins per side):
+    - Left header: col A, rows 1–22
+    - Right header: col I, rows 1–22
+    - Body bounding box: rows 1–26, cols A–J  ← nothing else may go here
 
-    **ESP32-S3 Pin Reference Table** — a table mapping every breadboard hole to its ESP32
-    signal, for both the left header (column A) and right header (column I), rows 1–22.
-    Mark which pins are used in the circuit with ✅. Warn explicitly that GPIO numbers do NOT
-    correspond to row numbers (e.g. GPIO 8 is at row 12, not row 8).
+12. Run the breadboard validator (no token required, no quota):
 
-    **Step-by-Step Assembly** — numbered steps grouped into labelled parts:
-      Part A — Place the MCU board
+        python3 breadboard_validator.py breadboard.yaml
+
+    Zero errors required. Fix breadboard.yaml and re-run until it exits 0.
+    This catches: occupied-hole wire conflicts, PCB body overlaps, oversized layouts.
+
+13. Generate assembly.md from the validated breadboard.yaml.
+
+    Because the layout passed step 12, every hole reference in assembly.md is
+    provably unoccupied and accessible.
+
+    assembly.md must contain:
+
+    **Parts List** — every component including passives needed to replace simulation
+    modules (e.g. LDR + 10K resistor to replace wokwi-photoresistor-sensor).
+
+    **Breadboard primer** — rows 1–63, columns A–E / F–J, row-half connectivity rule,
+    (+)/(−) rail convention.
+
+    **ESP32-S3 Pin Reference Table** — all 44 pins (22 per side), exact holes, which are
+    used. Warn that GPIO numbers do not correspond to row numbers.
+
+    **Step-by-step assembly** — derived directly from breadboard.yaml:
+      Part A — Place MCU board
       Part B — Set up power rails
-      Part C — Light sensor (real-world voltage divider replaces simulation module)
-      Part D — Potentiometer (LCD contrast)
-      Part E — LCD1602 display (all 16 pins, with pin table showing hole assignments)
-      Part F — Final check and power-on
+      Part C — Light sensor (LDR + resistor, from breadboard.yaml component positions)
+      Part D — Potentiometer
+      Part E — LCD1602 (pin table showing exact E-column holes)
+      Part F — Verification checklist (all 20 wires) and power-on test
 
-    Rules for each step:
-    - One action per step (place one component OR insert one wire)
-    - Name the exact holes involved, e.g. "Insert one end into B4 and the other into D36"
-    - Include the wire colour suggestion
-    - After each group of steps, add a plain-English explanation of what that group achieves
-      and how, so a first-time builder understands the purpose, not just the mechanics
-    - Add a "Check:" note after any step where a mistake is hard to spot later
-    - Conclude Part F with a complete wire-verification table (From → To → Colour → Purpose)
-      and troubleshooting tips for the most common failure modes
+    One action per step. Every hole reference must match breadboard.yaml exactly.
+    After generating, cross-check: count wires in assembly.md == count in breadboard.yaml.
 
-    Physical layout to use (verified against board.json pin coordinates):
-    - ESP32-S3 DevKitC-1: left header col A rows 1–22, right header col I rows 1–22
-    - LDR + 10K resistor voltage divider: col H rows 24–26 (right half)
-    - Potentiometer: col C rows 29–31 (left half)
-    - LCD1602 16-pin header: col E rows 33–48 (left half, pin 1 at E33, pin 16 at E48)
-
-    Note for the light sensor: the physical LDR+resistor divider (3.3V → LDR → junction →
-    10K → GND, with ADC at the junction) produces CORRECT behaviour — bright light gives a
-    high percentage. This is the opposite of the Wokwi sensor module, which had inverted
-    output. No firmware change is needed.
+    Note on light sensor polarity: the physical LDR divider (3.3V → LDR → junction →
+    10K → GND, ADC at junction) produces CORRECT behaviour (bright = high %). This
+    differs from the Wokwi sensor module which had inverted output. No firmware change
+    is needed.
