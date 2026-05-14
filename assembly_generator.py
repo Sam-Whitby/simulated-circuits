@@ -22,6 +22,7 @@ Usage:
     python3 assembly_generator.py --mode p2p pointtopoint.yaml
 """
 
+import configparser
 import os
 import sys
 import yaml
@@ -104,6 +105,22 @@ def load_library(layout_path: str) -> dict:
             with open(path) as f:
                 data = yaml.safe_load(f)
             return data.get("components", {})
+    return {}
+
+
+def load_pio_config(layout_path: str) -> dict:
+    """Find and parse the platformio.ini nearest to the layout file."""
+    base = os.path.dirname(os.path.abspath(layout_path))
+    for directory in [base, os.path.dirname(base)]:
+        ini_path = os.path.join(directory, "platformio.ini")
+        if os.path.exists(ini_path):
+            cfg = configparser.ConfigParser()
+            cfg.read(ini_path)
+            envs: dict = {}
+            for section in cfg.sections():
+                if section.startswith("env:"):
+                    envs[section[4:]] = dict(cfg[section])
+            return {"path": ini_path, "directory": directory, "envs": envs}
     return {}
 
 
@@ -306,9 +323,11 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.""")
         fr = str(w.get("from", ""))
         to = str(w.get("to", ""))
         is_power = (
-            "VCC" in purpose or "3V3" in purpose or "GND" in purpose or
-            ("rail" in to.lower() and fr.startswith("pin:")) or
-            ("rail" in fr.lower() and to.startswith("pin:"))
+            not fr.startswith("ext:") and not to.startswith("ext:") and (
+                "VCC" in purpose or "3V3" in purpose or "GND" in purpose or
+                ("rail" in to.lower() and fr.startswith("pin:")) or
+                ("rail" in fr.lower() and to.startswith("pin:"))
+            )
         )
         # Exclude SPI/signal wires that happen to mention ext components
         is_signal = any(x in purpose for x in
@@ -461,12 +480,7 @@ Solder a 16-pin male header to the LCD if not already fitted.
                 out.append(f"**{ename}** (`{eid}`) — connect via jumper wires:\n")
                 out.append("| Module pin | Connect to | Wire colour | Purpose |")
                 out.append("|------------|------------|-------------|---------|")
-                # Power connections from external_components.connections dict
-                for pin_name, dest in conns.items():
-                    dest_s = dest.replace("rail-plus","(+) power rail") \
-                                 .replace("rail-minus","(−) power rail")
-                    out.append(f"| {pin_name} | {dest_s} | — | power |")
-                # Signal connections from wires list
+                # All connections derived from the wires list (single source of truth)
                 for w in wires:
                     fr_s = str(w.get("from",""))
                     to_s = str(w.get("to",""))
@@ -538,6 +552,119 @@ Solder a 16-pin male header to the LCD if not already fitted.
     return "\n\n".join(out)
 
 
+def generate_power_section(layout: dict, library: dict) -> str:
+    """Explain power source and flag unconnected rails."""
+    wires  = layout.get("wires", [])
+    circuit = layout.get("circuit", "").lower()
+
+    rail_plus_used = any(
+        str(w.get("from","")) in ("rail-plus","rail+") or
+        str(w.get("to",""))   in ("rail-plus","rail+")
+        for w in wires
+    )
+    rail_plus_sourced = any(
+        str(w.get("to","")) in ("rail-plus","rail+") and
+        str(w.get("from","")).startswith("pin:")
+        for w in wires
+    )
+
+    lines: list[str] = ["## Power\n"]
+
+    if rail_plus_used and not rail_plus_sourced:
+        lines += [
+            "> **Warning — (+) power rail has no source.**",
+            ">",
+            "> This layout uses the (+) breadboard power rail but contains no wire that",
+            "> feeds 3.3 V into the rail.  The ESP32-S3's 3V3 pins (A1, A2) are on the",
+            "> left header where `tap_method = 'none'` — they cannot be tapped from the",
+            "> breadboard.  You must connect an external 3.3 V supply to the (+) rail",
+            "> before powering on, or rebuild this circuit in point-to-point (P2P) mode.",
+            "",
+        ]
+
+    lines += [
+        "**ESP32 power source**: Connect a USB-C cable to the **COM port** (the USB-C",
+        "port on the ESP32-S3-DevKitC-1 connected to the on-board USB bridge chip).",
+        "Plug the other end into a computer or USB charger (≥ 500 mA).",
+    ]
+
+    if "midi" in circuit or "usb host" in circuit:
+        lines += [
+            "",
+            "**The ESP32-S3-DevKitC-1 has two USB-C ports:**",
+            "",
+            "| Port | Label | Purpose |",
+            "|------|-------|---------|",
+            "| COM  | `COM` | Power in, serial monitor, firmware upload |",
+            "| OTG  | `USB` | USB host — receives MIDI data from keyboard |",
+            "",
+            "> The keyboard USB cable carries **MIDI data only**.  It does **not** power",
+            "> the ESP32.  Always connect the COM port to power before use.",
+        ]
+
+    return "\n".join(lines)
+
+
+def generate_firmware_section(layout: dict, layout_path: str) -> str:
+    """Generate firmware upload/monitor instructions derived from platformio.ini."""
+    pio = load_pio_config(layout_path)
+    if not pio or not pio.get("envs"):
+        return ""
+
+    circuit = layout.get("circuit", "").lower()
+    pio_dir = pio["directory"]
+    env      = next(iter(pio["envs"].values()))
+    monitor_speed = env.get("monitor_speed", "115200")
+    build_flags   = env.get("build_flags", "")
+
+    lines: list[str] = [
+        "## Firmware\n",
+        "All commands must be run from the PlatformIO project directory.\n",
+        f"```\ncd {pio_dir}\n```\n",
+    ]
+
+    if "WOKWI_SIMULATION" in build_flags.upper():
+        lines += [
+            "> **Warning — `WOKWI_SIMULATION=1` is active.**  The current `platformio.ini`",
+            "> builds firmware that generates a **synthetic MIDI arpeggio** instead of",
+            "> reading from a real keyboard.",
+            ">",
+            "> To target real hardware, edit `platformio.ini`:",
+            "> 1. Remove `-DWOKWI_SIMULATION=1` from `build_flags`.",
+            "> 2. Add `-DARDUINO_USB_MODE=0` (enables native USB OTG host mode).",
+            ">",
+            "> Note: the full USB MIDI host driver is currently stubbed.",
+            "> See `src/main.cpp` for implementation notes.",
+            "",
+        ]
+
+    lines += [
+        "### Upload\n",
+        "```\npio run --target upload\n```\n",
+        "### Monitor\n",
+        f"```\npio device monitor --baud {monitor_speed}\n```\n",
+    ]
+
+    if "midi" in circuit:
+        lines += [
+            "Expected serial output after successful SD initialisation:\n",
+            "```json",
+            '{"status":"SD_OK"}',
+            '{"t":12345,"note":60,"vel":64,"type":"noteOn","ch":1}',
+            "```\n",
+            'If the SD card is absent or fails you will see `{"status":"SD_FAIL"}` instead.\n',
+        ]
+    elif "ldr" in circuit or "light" in circuit:
+        lines += [
+            "Expected serial output:\n",
+            "```",
+            "ADC: 2048  Lux: 245",
+            "```\n",
+        ]
+
+    return "\n".join(lines)
+
+
 def generate_breadboard_md(layout: dict, layout_path: str = "") -> str:
     library = load_library(layout_path) if layout_path else {}
     circuit = layout.get("circuit", "Circuit")
@@ -555,21 +682,28 @@ def generate_breadboard_md(layout: dict, layout_path: str = "") -> str:
     ]
     if has_pot:
         sections += [pot_id_guide(layout), "---\n"]
+    firmware_md = generate_firmware_section(layout, layout_path)
     sections += [
         esp32_pin_table(layout),
+        "---\n",
+        generate_power_section(layout, library),
         "---\n",
         "## Step-by-Step Assembly\n\nWork in order. Complete each step before moving on.\n",
         "---\n",
         assembly_steps(layout, library),
     ]
+    if firmware_md:
+        sections += ["---\n", firmware_md]
     return "\n\n".join(s for s in sections if s)
 
 
 # ── P2P mode ──────────────────────────────────────────────────────────────────
 
-def generate_p2p_md(layout: dict) -> str:
+def generate_p2p_md(layout: dict, layout_path: str = "") -> str:
     wires = layout.get("wires", [])
     circuit = layout.get("circuit", "Circuit")
+    library = load_library(layout_path) if layout_path else {}
+    firmware_md = generate_firmware_section(layout, layout_path) if layout_path else ""
     out = [
         f"# Assembly Instructions — {circuit} (Point-to-Point)\n",
         "> **Generated deterministically from `pointtopoint.yaml`.**\n"
@@ -580,8 +714,13 @@ def generate_p2p_md(layout: dict) -> str:
         "wires — no breadboard is used.  Lay the ESP32 flat on a non-conductive "
         "surface (foam, cardboard, or a silicone mat).  Keep wires short and "
         "label or colour-code them to match this guide.\n\n"
-        "For **junction nodes** (nets with 3 or more endpoints), the first endpoint "
-        "listed is the hub: additional wires daisy-chain from that hub wire.\n",
+        "For junction nodes (nets with 3 or more endpoints), the first endpoint "
+        "listed is the hub: additional wires daisy-chain from that hub wire.\n\n"
+        "In P2P mode the ESP32 is NOT inserted into a breadboard, so left-header pins "
+        "are accessible: plug female-to-male jumper wires directly onto the pin stubs "
+        "that protrude below the underside of the PCB.\n",
+        "---\n",
+        generate_power_section(layout, library),
         "---\n",
         "## Wire-by-Wire Assembly\n",
         f"Total wires to connect: **{len(wires)}**\n",
@@ -618,6 +757,10 @@ def generate_p2p_md(layout: dict) -> str:
                "adding spoke wires.\n"
                "4. Connect USB-C and verify the system starts up correctly.")
 
+    if firmware_md:
+        out.append("\n---\n")
+        out.append(firmware_md)
+
     return "\n".join(out)
 
 
@@ -644,7 +787,7 @@ def main() -> None:
         layout = yaml.safe_load(f)
 
     if mode == "p2p":
-        md = generate_p2p_md(layout)
+        md = generate_p2p_md(layout, layout_path)
     else:
         md = generate_breadboard_md(layout, layout_path)
 

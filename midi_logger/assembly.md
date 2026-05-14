@@ -1,188 +1,137 @@
-# Assembly Instructions — MIDI Logger — ESP32-S3 USB host + Micro SD Card
+# Assembly Instructions — MIDI Logger — ESP32-S3 USB host + Micro SD Card (Point-to-Point)
+
+> **Generated deterministically from `pointtopoint.yaml`.**
+> No breadboard required.
+
+---
+
+## Overview
+
+Point-to-point (P2P) wiring connects component leads directly with jumper wires — no breadboard is used.  Lay the ESP32 flat on a non-conductive surface (foam, cardboard, or a silicone mat).  Keep wires short and label or colour-code them to match this guide.
+
+For junction nodes (nets with 3 or more endpoints), the first endpoint listed is the hub: additional wires daisy-chain from that hub wire.
+
+In P2P mode the ESP32 is NOT inserted into a breadboard, so left-header pins are accessible: plug female-to-male jumper wires directly onto the pin stubs that protrude below the underside of the PCB.
+
+---
+
+## Power
+
+**ESP32 power source**: Connect a USB-C cable to the **COM port** (the USB-C
+port on the ESP32-S3-DevKitC-1 connected to the on-board USB bridge chip).
+Plug the other end into a computer or USB charger (≥ 500 mA).
+
+**The ESP32-S3-DevKitC-1 has two USB-C ports:**
+
+| Port | Label | Purpose |
+|------|-------|---------|
+| COM  | `COM` | Power in, serial monitor, firmware upload |
+| OTG  | `USB` | USB host — receives MIDI data from keyboard |
+
+> The keyboard USB cable carries **MIDI data only**.  It does **not** power
+> the ESP32.  Always connect the COM port to power before use.
+---
+
+## Wire-by-Wire Assembly
+
+Total wires to connect: **6**
 
 
-> **Generated deterministically from a validated `breadboard.yaml` layout.**
-> Every hole reference was verified by `breadboard_validator.py`.
+### Net: VCC_3V3
+
+**Step 1.** Take a **red** jumper wire.
+- Connect one end to: **esp32.3V3 (left header, pin 1 — top-left)** — female end onto ESP32 header pin: 3V3 (left header, pin 1 — top-left)
+- Connect the other end to: **sdcard.VCC** — sdcard external — connect to VCC header pin
+- _Purpose: 3.3 V directly from ESP32 left-header pin 3V3.1 to SD card VCC (P2P; no rail)_
+
+
+### Net: GND
+
+**Step 2.** Take a **black** jumper wire.
+- Connect one end to: **esp32.GND (left header, pin 22 — bottom-left)** — female end onto ESP32 header pin: GND (left header, pin 22 — bottom-left)
+- Connect the other end to: **sdcard.GND** — sdcard external — connect to GND header pin
+- _Purpose: Ground directly from ESP32 left-header pin GND.1 to SD card GND (P2P; no rail)_
+
+
+### Net: SD_MOSI
+
+**Step 3.** Take a **yellow** jumper wire.
+- Connect one end to: **esp32.GPIO35 (right header, pin 13)** — female end onto ESP32 header pin: GPIO35 (right header, pin 13)
+- Connect the other end to: **sdcard.MOSI** — sdcard external — connect to MOSI header pin
+- _Purpose: SPI data host→card (GPIO35, right header I13, tap J13)_
+
+
+### Net: SD_MISO
+
+**Step 4.** Take a **blue** jumper wire.
+- Connect one end to: **esp32.GPIO37 (right header, pin 11)** — female end onto ESP32 header pin: GPIO37 (right header, pin 11)
+- Connect the other end to: **sdcard.MISO** — sdcard external — connect to MISO header pin
+- _Purpose: SPI data card→host (GPIO37, right header I11, tap J11)_
+
+
+### Net: SD_SCK
+
+**Step 5.** Take a **green** jumper wire.
+- Connect one end to: **esp32.GPIO36 (right header, pin 12)** — female end onto ESP32 header pin: GPIO36 (right header, pin 12)
+- Connect the other end to: **sdcard.SCK** — sdcard external — connect to SCK header pin
+- _Purpose: SPI clock (GPIO36, right header I12, tap J12)_
+
+
+### Net: SD_CS
+
+**Step 6.** Take a **orange** jumper wire.
+- Connect one end to: **esp32.GPIO38 (right header, pin 10)** — female end onto ESP32 header pin: GPIO38 (right header, pin 10)
+- Connect the other end to: **sdcard.CS** — sdcard external — connect to CS header pin
+- _Purpose: SPI chip-select (GPIO38, right header I10, tap J10)_
 
 
 ---
 
+## Verification
 
-## Parts List
-
-| Qty | Component | Notes |
-|-----|-----------|-------|
-| 1 | ESP32-S3-DevKitC-1 | The microcontroller board |
-| 1 | Micro SD card SPI reader module | Connected via 6 jumper wires — does NOT sit on the breadboard |
-| 1 | Full-size breadboard (830 points, 63 rows) | |
-| — | Jumper wires (7) | Assorted colours |
-| 1 | USB-C cable | To power the ESP32 and upload firmware |
+1. Trace every wire against the list above before powering on.
+2. Confirm no two wires share the same two endpoints (no duplicates).
+3. Verify all junction nodes have their hub wire connected before adding spoke wires.
+4. Connect USB-C and verify the system starts up correctly.
 
 ---
 
+## Firmware
 
-## Breadboard Primer
+All commands must be run from the PlatformIO project directory.
 
-A full-size breadboard has:
-- **Rows 1–63**, numbered from top to bottom.
-- **Columns A–J**, labelled across each row.
-- A **centre gap** that splits each row into two independent halves:
-  - Left half: columns A–E (all five holes in the same row are connected).
-  - Right half: columns F–J (same rule — connected within the half).
-- **Power rails** running the full length on each side: `(+)` and `(−)`.
+```
+cd /Users/samwhitby/Documents/PlatformIO/Projects/Test/midi_logger
+```
 
-**The one-hole-one-pin rule**: each hole holds exactly one lead or one wire pin.
-If a component occupies A4, a wire to the same node must use a different free
-hole in the same row-half.
+> **Warning — `WOKWI_SIMULATION=1` is active.**  The current `platformio.ini`
+> builds firmware that generates a **synthetic MIDI arpeggio** instead of
+> reading from a real keyboard.
+>
+> To target real hardware, edit `platformio.ini`:
+> 1. Remove `-DWOKWI_SIMULATION=1` from `build_flags`.
+> 2. Add `-DARDUINO_USB_MODE=0` (enables native USB OTG host mode).
+>
+> Note: the full USB MIDI host driver is currently stubbed.
+> See `src/main.cpp` for implementation notes.
 
-**The ESP32 body rule**: the ESP32-S3-DevKitC-1 PCB physically covers
-**rows 1–26, columns A–I**.  Only the actual header pin holes (A1–A22 and
-I1–I22) are accessible in this zone.  Left-header pins (col A, rows 1–22)
-have no adjacent free hole — columns B–E in those rows are blocked by the
-PCB body.  For right-header GPIO pins, use column J (same right-half row —
-J is outside the PCB body and always accessible).
+### Upload
 
-**Left-header connections**: the `parts_library.yaml` `header_info.left.tap_method`
-field determines whether left-header pins can be tapped.  If `"none"` (the
-default for this board variant), circuits that require left-header connections
-must use point-to-point (P2P) assembly instead of a breadboard.
+```
+pio run --target upload
+```
 
----
+### Monitor
 
+```
+pio device monitor --baud 115200
+```
 
-## ESP32-S3 Pin Reference
+Expected serial output after successful SD initialisation:
 
-GPIO numbers do **not** equal row numbers (e.g. GPIO8 is at row 12).
-The board body covers **rows 1–26, cols A–I** — only the header pin holes
-and col J (outside body) are accessible in that zone.
+```json
+{"status":"SD_OK"}
+{"t":12345,"note":60,"vel":64,"type":"noteOn","ch":1}
+```
 
-| Row | Left (col A) | Used? | Row | Right (col I) | Used? |
-|-----|-------------|-------|-----|--------------|-------|
-| 1 | **3V3.1** | GND | 1 | **GND.2** | GND |
-| 2 | 3V3.2 | — | 2 | TX | — |
-| 3 | RST | — | 3 | RX | — |
-| 4 | 4 | — | 4 | 1 | — |
-| 5 | 5 | — | 5 | 2 | — |
-| 6 | 6 | — | 6 | 42 | — |
-| 7 | 7 | — | 7 | 41 | — |
-| 8 | 15 | — | 8 | 40 | — |
-| 9 | 16 | — | 9 | 39 | — |
-| 10 | **17** | SD_CS | 10 | **38** | SD_CS |
-| 11 | **18** | SD_MISO | 11 | **37** | SD_MISO |
-| 12 | **8** | SD_SCK | 12 | **36** | SD_SCK |
-| 13 | **3** | SD_MOSI | 13 | **35** | SD_MOSI |
-| 14 | 46 | — | 14 | 0 | — |
-| 15 | 9 | — | 15 | 45 | — |
-| 16 | 10 | — | 16 | 48 | — |
-| 17 | 11 | — | 17 | 47 | — |
-| 18 | 12 | — | 18 | 21 | — |
-| 19 | 13 | — | 19 | 20 | — |
-| 20 | 14 | — | 20 | 19 | — |
-| 21 | 5V | — | 21 | GND.3 | — |
-| 22 | GND.1 | — | 22 | GND.4 | — |
-
----
-
-
-## Step-by-Step Assembly
-
-Work in order. Complete each step before moving on.
-
-
----
-
-
-### Part A — Place the ESP32-S3 board
-
-**A1.** Orient the breadboard with row 1 at the top.
-
-**A2.** Hold the ESP32-S3-DevKitC-1 with: USB-C port facing away from row 1 (the top of the breadboard).
-
-**A3.** Press the board firmly into the breadboard so that:
-- The left header pins go into **column A, rows 1–22**.
-- The right header pins go into **column I, rows 1–22**.
-- The board straddles the centre gap.
-
-The board PCB covers rows 1–26, cols A–I.  Do not place anything in that zone.
-Column J (rows 1–22) is outside the board body and accessible for wiring.
-
-
-### Part B — Set up the power rails
-
-
-**B1.** Take a **black** jumper wire.  Insert one end into hole J1 (row 1, right half).  Connect the other end to the (−) power rail.
-
-**B2.** Take a **gray** jumper wire.  Insert one end into sdcard module pin VCC.  Connect the other end to the (+) power rail.
-
-**B3.** Take a **gray** jumper wire.  Insert one end into sdcard module pin GND.  Connect the other end to the (−) power rail.
-
-
-### Part C — External component connections
-
-
-**Micro SD card SPI reader module** (`sdcard`) — connect via jumper wires:
-
-
-| Module pin | Connect to | Wire colour | Purpose |
-
-|------------|------------|-------------|---------|
-
-| VCC | (+) power rail | — | power |
-
-| GND | (−) power rail | — | power |
-
-| VCC | the (+) power rail | gray | SD_VCC |
-
-| GND | the (−) power rail | gray | SD_GND |
-
-| MOSI | hole J13 (row 13, right half) | gray | SD_MOSI |
-
-| MISO | hole J11 (row 11, right half) | gray | SD_MISO |
-
-| SCK | hole J12 (row 12, right half) | gray | SD_SCK |
-
-| CS | hole J10 (row 10, right half) | gray | SD_CS |
-
-
-
-
-
-### Part D — Verification checklist and power-on test
-
-
-Verify all wires before applying power:
-
-
-| # | From | To | Colour | Purpose |
-
-|---|------|----|--------|---------|
-
-| 1 | J1 | (−) rail | black | GND |
-
-| 2 | sdcard pin VCC | (+) rail | gray | SD_VCC |
-
-| 3 | sdcard pin GND | (−) rail | gray | SD_GND |
-
-| 4 | J13 | sdcard pin MOSI | gray | SD_MOSI |
-
-| 5 | J11 | sdcard pin MISO | gray | SD_MISO |
-
-| 6 | J12 | sdcard pin SCK | gray | SD_SCK |
-
-| 7 | J10 | sdcard pin CS | gray | SD_CS |
-
-
-**Power-on checklist:**
-
-
-1. Confirm all wires are connected as above.
-
-2. Connect the USB-C cable to the ESP32.
-
-3. Open a serial monitor at 115200 baud.
-
-4. Confirm you see {"status":"SD_OK"} or {"status":"SD_FAIL"}.
-
-5. Connect the keyboard via USB cable → Mepsies OTG adapter → ESP32 USB port.
-
-6. Play a note — a JSON line with "note": should appear in the serial log.
+If the SD card is absent or fails you will see `{"status":"SD_FAIL"}` instead.

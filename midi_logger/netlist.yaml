@@ -23,35 +23,21 @@ components:
     note: "External — SPI module with built-in SD slot; connect via 6 jumper wires"
 
 nets:
-  # ── Power rails ──────────────────────────────────────────────────────────────
+  # ── Power (point-to-point — no breadboard rail needed) ────────────────────────
+  # In P2P assembly the ESP32 is NOT inserted into a breadboard, so left-header
+  # pins are accessible via the long-end pin stubs below the PCB.  Female-to-male
+  # jumper wires plug directly onto esp32.3V3.1 and esp32.GND.1.
   - name: VCC_3V3
-    note: "3.3 V supply from ESP32 to breadboard + rail"
+    note: "3.3 V directly from ESP32 left-header pin 3V3.1 to SD card VCC (P2P; no rail)"
     pins:
       - esp32.3V3.1
-    rails:
-      - rail:plus
+      - sdcard.VCC
 
   - name: GND
-    note: "Ground from ESP32 to breadboard − rail"
+    note: "Ground directly from ESP32 left-header pin GND.1 to SD card GND (P2P; no rail)"
     pins:
       - esp32.GND.1
-    rails:
-      - rail:minus
-
-  # ── SD card power ─────────────────────────────────────────────────────────────
-  - name: SD_VCC
-    note: "SD module power from 3.3 V rail"
-    pins:
-      - sdcard.VCC
-    rails:
-      - rail:plus
-
-  - name: SD_GND
-    note: "SD module ground to GND rail"
-    pins:
       - sdcard.GND
-    rails:
-      - rail:minus
 
   # ── SD card SPI ───────────────────────────────────────────────────────────────
   - name: SD_MOSI

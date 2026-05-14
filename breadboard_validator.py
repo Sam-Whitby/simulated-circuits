@@ -322,6 +322,77 @@ def validate(breadboard_path: str, library_path: str | None = None) -> list[str]
                     f"board variant. Reassign to a right-header GPIO or use P2P mode."
                 )
 
+    # ── 1e. Check that each used power rail has at least one source wire ──────
+    # A "source wire" is one where `to == rail-X` and `from` is in the same
+    # breadboard row-half as an ESP32 pin of the matching polarity (GND or 3V3).
+    # This correctly identifies right-header GND taps (e.g. J1 → I1=GND.2)
+    # as valid GND sources while flagging circuits where rail-plus has no source
+    # because the 3V3 left-header pins cannot be tapped (tap_method='none').
+
+    # Build (row, half) sets from ESP32 pin positions in the occupied dict.
+    # "half" = "L" for left (A–E), "R" for right (F–J).
+    esp32_gnd_taps:  set[tuple] = set()
+    esp32_vcc_taps:  set[tuple] = set()
+    for comp in layout.get("components", []):
+        if comp.get("type") != "board-esp32-s3-devkitc-1":
+            continue
+        for pin_name, raw_hole in comp.get("pins", {}).items():
+            parsed = parse_hole(str(raw_hole))
+            if not parsed:
+                continue
+            col, row = parsed
+            half = "L" if col in LEFT_HALF else "R"
+            pnu = pin_name.upper()
+            if "GND" in pnu:
+                esp32_gnd_taps.add((row, half))
+            elif "3V3" in pnu or "5V" in pnu:
+                esp32_vcc_taps.add((row, half))
+
+    def is_esp32_tap(hole_str: str, tap_set: set) -> bool:
+        """Return True if hole_str is in the same row-half as an ESP32 power pin."""
+        p = parse_hole(hole_str)
+        if not p:
+            return False
+        col, row = p
+        half = "L" if col in LEFT_HALF else "R"
+        return (row, half) in tap_set
+
+    for rail_key, rail_alts, vcc_rail in [
+        ("rail-plus",  ("rail-plus", "rail+"),  True),
+        ("rail-minus", ("rail-minus", "rail-"), False),
+    ]:
+        tap_set = esp32_vcc_taps if vcc_rail else esp32_gnd_taps
+        rail_wires = [w for w in layout.get("wires", [])
+                      if str(w.get("from","")).strip() in rail_alts or
+                         str(w.get("to","")).strip() in rail_alts]
+        if not rail_wires:
+            continue   # rail not referenced — no problem
+        # A source wire: "to" is the rail AND "from" is an ESP32 power-pin tap
+        # OR a pin: endpoint (which check 1d will separately validate).
+        source_wires = [
+            w for w in rail_wires
+            if str(w.get("to","")).strip() in rail_alts and (
+                str(w.get("from","")).startswith("pin:") or
+                is_esp32_tap(str(w.get("from","")).strip(), tap_set)
+            )
+        ]
+        if not source_wires:
+            if vcc_rail:
+                detail = (
+                    "The ESP32-S3's 3V3 pins (A1, A2) are on the left header where "
+                    "tap_method='none' — they cannot be tapped from the breadboard. "
+                    "Connect an external 3.3 V supply to rail-plus, or switch to P2P mode."
+                )
+            else:
+                detail = (
+                    "Add a wire from a col-J hole adjacent to an ESP32 right-header "
+                    "GND pin (e.g. J1 for GND.2, J21 for GND.3, J22 for GND.4)."
+                )
+            errors.append(
+                f"POWER RAIL UNCONNECTED: '{rail_key}' is used by "
+                f"{len(rail_wires)} wire(s) but has no source wire. {detail}"
+            )
+
     # ── 2. Check every wire endpoint ──────────────────────────────────────────
     for wire in layout.get("wires", []):
         label = wire.get("purpose", "unnamed wire")

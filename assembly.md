@@ -108,6 +108,23 @@ and col J (outside body) are accessible in that zone.
 ---
 
 
+## Power
+
+> **Warning — (+) power rail has no source.**
+>
+> This layout uses the (+) breadboard power rail but contains no wire that
+> feeds 3.3 V into the rail.  The ESP32-S3's 3V3 pins (A1, A2) are on the
+> left header where `tap_method = 'none'` — they cannot be tapped from the
+> breadboard.  You must connect an external 3.3 V supply to the (+) rail
+> before powering on, or rebuild this circuit in point-to-point (P2P) mode.
+
+**ESP32 power source**: Connect a USB-C cable to the **COM port** (the USB-C
+port on the ESP32-S3-DevKitC-1 connected to the on-board USB bridge chip).
+Plug the other end into a computer or USB charger (≥ 500 mA).
+
+---
+
+
 ## Step-by-Step Assembly
 
 Work in order. Complete each step before moving on.
@@ -288,3 +305,32 @@ Verify all wires before applying power:
 6. Cover the LDR — the sensor reading should decrease.
 
 7. Uncover and hold a torch close — the reading should increase.
+
+---
+
+
+## Firmware
+
+All commands must be run from the PlatformIO project directory.
+
+```
+cd /Users/samwhitby/Documents/PlatformIO/Projects/Test
+```
+
+### Upload
+
+```
+pio run --target upload
+```
+
+### Monitor
+
+```
+pio device monitor --baud 115200
+```
+
+Expected serial output:
+
+```
+ADC: 2048  Lux: 245
+```
