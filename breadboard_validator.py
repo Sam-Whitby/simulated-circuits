@@ -297,6 +297,31 @@ def validate(breadboard_path: str, library_path: str | None = None) -> list[str]
                     f"'{pin_name}' is not a declared pin of component '{cid}'"
                 )
 
+    # ── 1d. Check pin: wires against header_info.left.tap_method ─────────────
+    # A wire using "pin:comp.PIN" claims it can physically attach a female jumper
+    # to a header pin above the PCB.  This is only valid when the component's
+    # parts_library entry declares tap_method == "female_jumper".
+    for wire in layout.get("wires", []):
+        label = wire.get("purpose", "unnamed wire")
+        for side in ("from", "to"):
+            raw = str(wire.get(side, "")).strip()
+            if not raw.startswith("pin:"):
+                continue
+            cid = raw[4:].split(".")[0]
+            ctype = next((c.get("type","") for c in layout.get("components",[])
+                          if c.get("id") == cid), None)
+            if not ctype:
+                continue
+            tap = (library.get(ctype, {})
+                   .get("header_info", {}).get("left", {}).get("tap_method", "none"))
+            if tap != "female_jumper":
+                errors.append(
+                    f"PHYSICAL CONSTRAINT: '{label}' uses '{raw}' but "
+                    f"{ctype} has header_info.left.tap_method='{tap}' — "
+                    f"female jumper attachment is not physically feasible for this "
+                    f"board variant. Reassign to a right-header GPIO or use P2P mode."
+                )
+
     # ── 2. Check every wire endpoint ──────────────────────────────────────────
     for wire in layout.get("wires", []):
         label = wire.get("purpose", "unnamed wire")

@@ -18,7 +18,7 @@
 | 1 | 10 KΩ potentiometer (B10K) | **2+1 pin type** — two terminals on one side, wiper on the other |
 | 1 | LCD1602A (16-pin parallel) | Connected via wires — does NOT sit on the breadboard |
 | 1 | Full-size breadboard (830 points, 63 rows) | |
-| — | Jumper wires (19 male-to-male + 1 female-to-male) | Assorted colours |
+| — | Jumper wires (18) | Assorted colours |
 | 1 | USB-C cable | To power the ESP32 and upload firmware |
 
 ---
@@ -40,10 +40,15 @@ hole in the same row-half.
 
 **The ESP32 body rule**: the ESP32-S3-DevKitC-1 PCB physically covers
 **rows 1–26, columns A–I**.  Only the actual header pin holes (A1–A22 and
-I1–I22) are accessible in this zone.  For left-header pins with no free
-adjacent hole, use a female-to-male jumper wire plugged directly onto the
-exposed pin above the PCB board.  For right-header GPIO pins, use column J
-(same right-half row — J is outside the PCB body and always accessible).
+I1–I22) are accessible in this zone.  Left-header pins (col A, rows 1–22)
+have no adjacent free hole — columns B–E in those rows are blocked by the
+PCB body.  For right-header GPIO pins, use column J (same right-half row —
+J is outside the PCB body and always accessible).
+
+**Left-header connections**: the `parts_library.yaml` `header_info.left.tap_method`
+field determines whether left-header pins can be tapped.  If `"none"` (the
+default for this board variant), circuits that require left-header connections
+must use point-to-point (P2P) assembly instead of a breadboard.
 
 ---
 
@@ -77,7 +82,7 @@ and col J (outside body) are accessible in that zone.
 
 | Row | Left (col A) | Used? | Row | Right (col I) | Used? |
 |-----|-------------|-------|-----|--------------|-------|
-| 1 | **3V3.1** | ESP32 3.3V → (+) power rail | 1 | **GND.2** | ESP32 GND (right header row 1) → (-) pow |
+| 1 | **3V3.1** | ESP32 GND (right header row 1) → (-) pow | 1 | **GND.2** | ESP32 GND (right header row 1) → (-) pow |
 | 2 | 3V3.2 | — | 2 | TX | — |
 | 3 | RST | — | 3 | RX | — |
 | 4 | **4** | LDR junction → ESP32 GPIO1 (ADC input) | 4 | **1** | LDR junction → ESP32 GPIO1 (ADC input) |
@@ -89,7 +94,7 @@ and col J (outside body) are accessible in that zone.
 | 10 | **17** | GPIO38 → LCD D7 (pin 14) | 10 | **38** | GPIO38 → LCD D7 (pin 14) |
 | 11 | 18 | — | 11 | 37 | — |
 | 12 | 8 | — | 12 | 36 | — |
-| 13 | **3** | ESP32 3.3V → (+) power rail | 13 | 35 | — |
+| 13 | 3 | — | 13 | 35 | — |
 | 14 | 46 | — | 14 | 0 | — |
 | 15 | 9 | — | 15 | 45 | — |
 | 16 | 10 | — | 16 | 48 | — |
@@ -115,7 +120,7 @@ Work in order. Complete each step before moving on.
 
 **A1.** Orient the breadboard with row 1 at the top.
 
-**A2.** Hold the ESP32-S3-DevKitC-1 with the USB-C port facing away from you.
+**A2.** Hold the ESP32-S3-DevKitC-1 with: USB-C port facing away from row 1 (the top of the breadboard).
 
 **A3.** Press the board firmly into the breadboard so that:
 - The left header pins go into **column A, rows 1–22**.
@@ -129,9 +134,7 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.
 ### Part B — Set up the power rails
 
 
-**B1.** Take a **red female-to-male** jumper wire.  Plug the **female (socket) end** directly onto the ESP32 header pin `3V3.1` (the pin protrudes above the PCB).  Insert the **male end** into the (+) power rail.
-
-**B2.** Take a **black** jumper wire.  Insert one end into hole J1 (row 1, right half).  Connect the other end to the (−) power rail.
+**B1.** Take a **black** jumper wire.  Insert one end into hole J1 (row 1, right half).  Connect the other end to the (−) power rail.
 
 
 ### Part C — Light sensor (LDR voltage divider)
@@ -139,9 +142,9 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.
 
 The LDR and 10 KΩ resistor form a voltage divider.  The ESP32 reads the midpoint.
 
-**C1.** Bend the LDR leads straight down (~7 mm apart).  Insert into **H28** and **H29** (either lead, LDR has no polarity).
+**C1.** Bend both leads straight down so tips are one row apart (2.54 mm) for vertical insertion.  Insert into **H28** and **H29** (either lead, LDR has no polarity).
 
-**C2.** Bend the 10 KΩ resistor leads (~5 mm apart).  Insert **lead-1 into G29**, **lead-2 into G31**.
+**C2.** Bend the 10 KΩ resistor leads for vertical insertion.  Insert **lead-1 into G29**, **lead-2 into G31**.
   (G29 is in the same right-half row as H29 — they are connected.)
 
 
@@ -232,43 +235,41 @@ Verify all wires before applying power:
 
 |---|------|----|--------|---------|
 
-| 1 | ESP32 pin 3V3.1 (female) | (+) rail | red | ESP32 3.3V → (+) power rail |
+| 1 | J1 | (−) rail | black | ESP32 GND (right header row 1) → (-) power rail |
 
-| 2 | J1 | (−) rail | black | ESP32 GND (right header row 1) → (-) power rail |
+| 2 | (+) rail | F28 | red | 3.3V → top of LDR |
 
-| 3 | (+) rail | F28 | red | 3.3V → top of LDR |
+| 3 | F31 | (−) rail | black | Bottom of 10K resistor → GND |
 
-| 4 | F31 | (−) rail | black | Bottom of 10K resistor → GND |
+| 4 | F29 | J4 | yellow | LDR junction → ESP32 GPIO1 (ADC input) |
 
-| 5 | F29 | J4 | yellow | LDR junction → ESP32 GPIO1 (ADC input) |
+| 5 | B33 | (−) rail | black | Potentiometer GND terminal → (-) rail |
 
-| 6 | B33 | (−) rail | black | Potentiometer GND terminal → (-) rail |
+| 6 | B35 | (+) rail | red | Potentiometer VCC terminal → (+) rail |
 
-| 7 | B35 | (+) rail | red | Potentiometer VCC terminal → (+) rail |
+| 7 | B34 | lcd pin V0 | green | Potentiometer wiper → LCD contrast (V0, pin 3) |
 
-| 8 | B34 | lcd pin V0 | green | Potentiometer wiper → LCD contrast (V0, pin 3) |
+| 8 | (−) rail | lcd pin VSS | black | LCD VSS (pin 1) → GND |
 
-| 9 | (−) rail | lcd pin VSS | black | LCD VSS (pin 1) → GND |
+| 9 | (+) rail | lcd pin VDD | red | LCD VDD (pin 2) → 3.3V |
 
-| 10 | (+) rail | lcd pin VDD | red | LCD VDD (pin 2) → 3.3V |
+| 10 | (−) rail | lcd pin RW | black | LCD RW (pin 5) → GND (write-only mode) |
 
-| 11 | (−) rail | lcd pin RW | black | LCD RW (pin 5) → GND (write-only mode) |
+| 11 | (+) rail | lcd pin A | red | LCD backlight anode (pin 15) → 3.3V |
 
-| 12 | (+) rail | lcd pin A | red | LCD backlight anode (pin 15) → 3.3V |
+| 12 | (−) rail | lcd pin K | black | LCD backlight cathode (pin 16) → GND |
 
-| 13 | (−) rail | lcd pin K | black | LCD backlight cathode (pin 16) → GND |
+| 13 | J5 | lcd pin RS | blue | GPIO2 → LCD RS (pin 4, data/command select) |
 
-| 14 | J5 | lcd pin RS | blue | GPIO2 → LCD RS (pin 4, data/command select) |
+| 14 | J6 | lcd pin E | purple | GPIO42 → LCD Enable (pin 6) |
 
-| 15 | J6 | lcd pin E | purple | GPIO42 → LCD Enable (pin 6) |
+| 15 | J7 | lcd pin D4 | orange | GPIO41 → LCD D4 (pin 11) |
 
-| 16 | J7 | lcd pin D4 | orange | GPIO41 → LCD D4 (pin 11) |
+| 16 | J8 | lcd pin D5 | yellow | GPIO40 → LCD D5 (pin 12) |
 
-| 17 | J8 | lcd pin D5 | yellow | GPIO40 → LCD D5 (pin 12) |
+| 17 | J9 | lcd pin D6 | green | GPIO39 → LCD D6 (pin 13) |
 
-| 18 | J9 | lcd pin D6 | green | GPIO39 → LCD D6 (pin 13) |
-
-| 19 | J10 | lcd pin D7 | white | GPIO38 → LCD D7 (pin 14) |
+| 18 | J10 | lcd pin D7 | white | GPIO38 → LCD D7 (pin 14) |
 
 
 **Power-on checklist:**

@@ -130,6 +130,8 @@ components:
       Leads are bent so the component stands vertically; the two lead tips
       sit in adjacent rows of the same breadboard column.
 
+    lead_bend_note: "Bend both leads straight down so tips are one row apart (2.54 mm) for vertical insertion"
+
     pins:
       lead-1: {offset_col: 0, offset_row: 0}   # anchor (3.3 V end in this design)
       lead-2: {offset_col: 0, offset_row: 1}   # junction end (1 row below)
@@ -180,6 +182,29 @@ components:
       # Individual GPIO positions are declared in breadboard.yaml; their mapping is
       # complex (GPIO number ≠ row number) and is NOT validated via the library.
       3V3.1: {offset_col: 0, offset_row: 0}   # anchor — left header pin 1 (top-left)
+
+    header_info:
+      # Documents the physical connector access method for each header.
+      # Tools (placer, validator, assembly generator) read this to determine
+      # how wires can be connected to header pins.
+      left:
+        col: A
+        tap_method: "none"
+        # "none"          = No adjacent breadboard hole exists (cols B–E rows 1–22 are
+        #                   physically blocked by the PCB body), AND header pins do not
+        #                   protrude sufficiently above the PCB for female jumper attachment.
+        #                   Left-header pins cannot be tapped — they are terminal connections
+        #                   only (the breadboard hole itself is the connection point).
+        # "female_jumper" = Pins protrude ≥3 mm above PCB surface; a female-to-male jumper
+        #                   can be plugged onto the exposed stub. Only set this after
+        #                   physically verifying your board variant has adequate protrusion.
+        tap_col: null
+      right:
+        col: I
+        tap_method: "adjacent_col"   # col J is outside body and always free
+        tap_col: J
+
+    orientation_cue: "USB-C port facing away from row 1 (the top of the breadboard)"
 
     body_breadboard:
       # Body relative to left-header pin 1 (anchor = 3V3.1 at A1)

@@ -50,7 +50,7 @@ def describe_hole(hole: str) -> str:
     return f"{col}{row} (row {row}, {half_name(col)} half)"
 
 
-def wire_endpoint_text(raw: str, side: str) -> str:
+def wire_endpoint_text(raw: str, side: str, library: dict | None = None) -> str:
     """Human-readable description of a wire endpoint."""
     s = str(raw).strip()
     if s in ("rail-plus", "rail+"):
@@ -67,8 +67,16 @@ def wire_endpoint_text(raw: str, side: str) -> str:
         return s
     if s.startswith("pin:"):
         ref = s[4:]   # e.g. "esp32.3V3.1"
-        return (f"the ESP32 header pin '{ref.split('.', 1)[-1]}' "
-                f"(plug female end directly onto the pin above the PCB)")
+        pin_label = ref.split(".", 1)[-1]
+        # Check if the board type actually supports female-jumper connections
+        lib = library or {}
+        tap = (lib.get("board-esp32-s3-devkitc-1", {})
+               .get("header_info", {}).get("left", {}).get("tap_method", "none"))
+        if tap == "female_jumper":
+            return (f"the ESP32 header pin '{pin_label}' "
+                    f"(plug female jumper onto the pin stub above the PCB)")
+        # tap_method != "female_jumper" — this endpoint should have been caught by the validator
+        return f"[INVALID: pin:{ref} — left-header tap_method='{tap}'; use P2P mode instead]"
     # Standard hole
     col = s[0].upper()
     row = s[1:]
@@ -117,7 +125,7 @@ COMP_DISPLAY_NAMES = {
 }
 
 
-def parts_list(layout: dict) -> str:
+def parts_list(layout: dict, library: dict) -> str:
     lines = ["## Parts List\n",
              "| Qty | Component | Notes |",
              "|-----|-----------|-------|"]
@@ -128,9 +136,16 @@ def parts_list(layout: dict) -> str:
         lines.append(f"| 1 | {name} | {note} |")
 
     wires = layout.get("wires", [])
-    female_count = sum(1 for w in wires if str(w.get("from","")).startswith("pin:"))
-    wire_desc = (f"{len(wires)} male-to-male + {female_count} female-to-male"
-                 if female_count else str(len(wires)))
+    # Only count female-to-male wires when the library confirms female jumpers are feasible
+    left_tap = (library.get("board-esp32-s3-devkitc-1", {})
+                .get("header_info", {}).get("left", {}).get("tap_method", "none"))
+    pin_wires = [w for w in wires if str(w.get("from","")).startswith("pin:")]
+    female_count = len(pin_wires) if left_tap == "female_jumper" else 0
+    male_count   = len(wires) - len(pin_wires)
+    if female_count:
+        wire_desc = f"{male_count} male-to-male + {female_count} female-to-male"
+    else:
+        wire_desc = str(len(wires))
     lines.append(f"| 1 | Full-size breadboard (830 points, 63 rows) | |")
     lines.append(f"| — | Jumper wires ({wire_desc}) | Assorted colours |")
     lines.append("| 1 | USB-C cable | To power the ESP32 and upload firmware |")
@@ -154,10 +169,15 @@ hole in the same row-half.
 
 **The ESP32 body rule**: the ESP32-S3-DevKitC-1 PCB physically covers
 **rows 1–26, columns A–I**.  Only the actual header pin holes (A1–A22 and
-I1–I22) are accessible in this zone.  For left-header pins with no free
-adjacent hole, use a female-to-male jumper wire plugged directly onto the
-exposed pin above the PCB board.  For right-header GPIO pins, use column J
-(same right-half row — J is outside the PCB body and always accessible)."""
+I1–I22) are accessible in this zone.  Left-header pins (col A, rows 1–22)
+have no adjacent free hole — columns B–E in those rows are blocked by the
+PCB body.  For right-header GPIO pins, use column J (same right-half row —
+J is outside the PCB body and always accessible).
+
+**Left-header connections**: the `parts_library.yaml` `header_info.left.tap_method`
+field determines whether left-header pins can be tapped.  If `"none"` (the
+default for this board variant), circuits that require left-header connections
+must use point-to-point (P2P) assembly instead of a breadboard."""
 
 
 def pot_id_guide(layout: dict) -> str:
@@ -242,7 +262,7 @@ def esp32_pin_table(layout: dict) -> str:
     return "\n".join(rows)
 
 
-def assembly_steps(layout: dict) -> str:
+def assembly_steps(layout: dict, library: dict) -> str:
     wires = layout.get("wires", [])
     components     = layout.get("components", [])
     ext_components = layout.get("external_components", [])
@@ -251,6 +271,11 @@ def assembly_steps(layout: dict) -> str:
     has_pot  = any(c.get("type") == "potentiometer-10k"  for c in components)
     has_lcd  = any(c.get("type") == "lcd1602-16pin"      for c in ext_components)
     has_ext  = bool(ext_components)
+
+    esp32_lib = library.get("board-esp32-s3-devkitc-1", {})
+    left_tap  = esp32_lib.get("header_info", {}).get("left", {}).get("tap_method", "none")
+    orientation_cue = esp32_lib.get("orientation_cue",
+                                    "USB-C port facing away from row 1 (the top of the breadboard)")
 
     out = []
     part = ord("A")
@@ -261,7 +286,7 @@ def assembly_steps(layout: dict) -> str:
 
 **A1.** Orient the breadboard with row 1 at the top.
 
-**A2.** Hold the ESP32-S3-DevKitC-1 with the USB-C port facing away from you.
+**A2.** Hold the ESP32-S3-DevKitC-1 with: {orientation_cue}.
 
 **A3.** Press the board firmly into the breadboard so that:
 - The left header pins go into **column A, rows 1–22**.
@@ -292,18 +317,26 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.""")
         if not is_power or is_signal:
             continue
         colour = str(w.get("color", "red" if "3V3" in purpose or "VCC" in purpose else "black"))
-        if fr.startswith("pin:"):
+        if fr.startswith("pin:") and left_tap == "female_jumper":
             out.append(
                 f"**{pl}{step_n}.** Take a **{colour} female-to-male** jumper wire.  "
-                f"Plug the **female (socket) end** directly onto the ESP32 header pin "
-                f"`{fr[4:].split('.',1)[-1]}` (the pin protrudes above the PCB).  "
-                f"Insert the **male end** into {wire_endpoint_text(to, 'to')}."
+                f"Plug the **female (socket) end** onto the ESP32 header pin "
+                f"`{fr[4:].split('.',1)[-1]}` (the pin stub protrudes above the PCB).  "
+                f"Insert the **male end** into {wire_endpoint_text(to, 'to', library)}."
+            )
+        elif fr.startswith("pin:"):
+            # pin: wire present but tap_method != female_jumper — should have been
+            # caught by the validator; output a clear error marker rather than bad instructions
+            out.append(
+                f"**{pl}{step_n}.** [ERROR: wire '{w.get('purpose',fr)}' uses a pin: "
+                f"endpoint but left-header tap_method='{left_tap}'. "
+                f"This layout must be redesigned or switched to P2P mode.]"
             )
         else:
             out.append(
                 f"**{pl}{step_n}.** Take a **{colour}** jumper wire.  "
-                f"Insert one end into {wire_endpoint_text(fr, 'from')}.  "
-                f"Connect the other end to {wire_endpoint_text(to, 'to')}."
+                f"Insert one end into {wire_endpoint_text(fr, 'from', library)}.  "
+                f"Connect the other end to {wire_endpoint_text(to, 'to', library)}."
             )
         step_n += 1
     part += 1
@@ -314,6 +347,9 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.""")
         out.append(f"\n### Part {pl} — Light sensor (LDR voltage divider)\n")
         ldr = next((c for c in components if c.get("type") == "photoresistor-ldr"), None)
         res = next((c for c in components if c.get("type") == "resistor"), None)
+        ldr_lib = library.get("photoresistor-ldr", {})
+        ldr_bend = ldr_lib.get("lead_bend_note",
+                               "bend leads for vertical insertion in adjacent rows")
         if ldr and res:
             l1 = ldr["pins"].get("lead-1", "?")
             l2 = ldr["pins"].get("lead-2", "?")
@@ -322,9 +358,9 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.""")
             out.append(
                 f"The LDR and 10 KΩ resistor form a voltage divider.  "
                 f"The ESP32 reads the midpoint.\n\n"
-                f"**{pl}1.** Bend the LDR leads straight down (~7 mm apart).  "
+                f"**{pl}1.** {ldr_bend.capitalize()}.  "
                 f"Insert into **{l1}** and **{l2}** (either lead, LDR has no polarity).\n\n"
-                f"**{pl}2.** Bend the 10 KΩ resistor leads (~5 mm apart).  "
+                f"**{pl}2.** Bend the 10 KΩ resistor leads for vertical insertion.  "
                 f"Insert **lead-1 into {r1}**, **lead-2 into {r2}**.\n"
                 f"  ({r1} is in the same right-half row as {l2} — they are connected.)\n"
             )
@@ -337,8 +373,8 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.""")
                 colour = str(w.get("color", "gray"))
                 out.append(
                     f"**{pl}{step_n}.** Take a **{colour}** jumper wire.  "
-                    f"Insert one end into {wire_endpoint_text(fr, 'from')}.  "
-                    f"Connect the other end to {wire_endpoint_text(to, 'to')}.\n"
+                    f"Insert one end into {wire_endpoint_text(fr, 'from', library)}.  "
+                    f"Connect the other end to {wire_endpoint_text(to, 'to', library)}.\n"
                     f"  _{w.get('purpose', '')}_"
                 )
                 step_n += 1
@@ -371,8 +407,8 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.""")
                 colour = str(w.get("color", "gray"))
                 out.append(
                     f"**{pl}{step_n}.** Take a **{colour}** jumper wire.  "
-                    f"Insert one end into {wire_endpoint_text(fr, 'from')}.  "
-                    f"Connect the other end to {wire_endpoint_text(to, 'to')}.\n"
+                    f"Insert one end into {wire_endpoint_text(fr, 'from', library)}.  "
+                    f"Connect the other end to {wire_endpoint_text(to, 'to', library)}.\n"
                     f"  _{w.get('purpose', '')}_"
                 )
                 step_n += 1
@@ -399,10 +435,10 @@ Solder a 16-pin male header to the LCD if not already fitted.
                 fr_s = str(w.get("from", ""))
                 if to_s.startswith("ext:lcd:"):
                     pin = to_s.split(":")[-1]
-                    lcd_wires[pin] = (wire_endpoint_text(fr_s, "from"), w.get("color", "—"))
+                    lcd_wires[pin] = (wire_endpoint_text(fr_s, "from", library), w.get("color", "—"))
                 elif fr_s.startswith("ext:lcd:"):
                     pin = fr_s.split(":")[-1]
-                    lcd_wires[pin] = (wire_endpoint_text(to_s, "to"), w.get("color", "—"))
+                    lcd_wires[pin] = (wire_endpoint_text(to_s, "to", library), w.get("color", "—"))
 
             lcd_order = ["VSS","VDD","V0","RS","RW","E","D0","D1","D2","D3",
                          "D4","D5","D6","D7","A","K"]
@@ -437,11 +473,11 @@ Solder a 16-pin male header to the LCD if not already fitted.
                     prefix = f"ext:{eid}:"
                     if fr_s.startswith(prefix):
                         pin = fr_s[len(prefix):]
-                        out.append(f"| {pin} | {wire_endpoint_text(to_s,'to')} "
+                        out.append(f"| {pin} | {wire_endpoint_text(to_s,'to',library)} "
                                    f"| {w.get('color','—')} | {w.get('purpose','—')} |")
                     elif to_s.startswith(prefix):
                         pin = to_s[len(prefix):]
-                        out.append(f"| {pin} | {wire_endpoint_text(fr_s,'from')} "
+                        out.append(f"| {pin} | {wire_endpoint_text(fr_s,'from',library)} "
                                    f"| {w.get('color','—')} | {w.get('purpose','—')} |")
                 out.append("")
         part += 1
@@ -464,7 +500,9 @@ Solder a 16-pin male header to the LCD if not already fitted.
             parts = to.split(":")
             to = f"{parts[1]} pin {parts[2]}" if len(parts) == 3 else to
         if fr.startswith("pin:"):
-            fr = f"ESP32 pin {fr[4:].split('.',1)[-1]} (female)"
+            pin_label = fr[4:].split(".", 1)[-1]
+            suffix = " (female jumper)" if left_tap == "female_jumper" else " [INVALID pin: endpoint]"
+            fr = f"ESP32 pin {pin_label}{suffix}"
         out.append(f"| {i} | {fr} | {to} | {w.get('color','—')} | {w.get('purpose','—')} |")
 
     # Circuit-specific power-on hints
@@ -500,7 +538,8 @@ Solder a 16-pin male header to the LCD if not already fitted.
     return "\n\n".join(out)
 
 
-def generate_breadboard_md(layout: dict) -> str:
+def generate_breadboard_md(layout: dict, layout_path: str = "") -> str:
+    library = load_library(layout_path) if layout_path else {}
     circuit = layout.get("circuit", "Circuit")
     has_pot = any(c.get("type") == "potentiometer-10k"
                   for c in layout.get("components", []))
@@ -509,7 +548,7 @@ def generate_breadboard_md(layout: dict) -> str:
         "> **Generated deterministically from a validated `breadboard.yaml` layout.**\n"
         "> Every hole reference was verified by `breadboard_validator.py`.\n",
         "---\n",
-        parts_list(layout),
+        parts_list(layout, library),
         "---\n",
         BREADBOARD_PRIMER,
         "---\n",
@@ -521,7 +560,7 @@ def generate_breadboard_md(layout: dict) -> str:
         "---\n",
         "## Step-by-Step Assembly\n\nWork in order. Complete each step before moving on.\n",
         "---\n",
-        assembly_steps(layout),
+        assembly_steps(layout, library),
     ]
     return "\n\n".join(s for s in sections if s)
 
@@ -607,7 +646,7 @@ def main() -> None:
     if mode == "p2p":
         md = generate_p2p_md(layout)
     else:
-        md = generate_breadboard_md(layout)
+        md = generate_breadboard_md(layout, layout_path)
 
     if output_path:
         with open(output_path, "w") as f:

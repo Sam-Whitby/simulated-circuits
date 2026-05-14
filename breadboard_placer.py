@@ -278,15 +278,17 @@ def place_component(cid: str, ctype: str, lib_spec: dict,
 # ── Wire routing ──────────────────────────────────────────────────────────────
 
 def resolve_component_pin(pin_ref: str, placements: dict,
-                           esp32_pin_map: dict) -> Optional[tuple]:
+                           esp32_pin_map: dict,
+                           library: dict) -> Optional[tuple]:
     """
     Resolve 'component_id.pin_name' to (col, row) or special string.
     Returns:
-      (col, row)         — standard breadboard hole
-      ("pin:", ref)      — female wire onto ESP32 header pin above PCB
-      ("rail", "plus")   — power rail
-      ("rail", "minus")  — ground rail
-      None               — cannot resolve
+      (col, row)       — standard breadboard hole
+      ("pin:", ref)    — female wire onto ESP32 header pin above PCB
+                         (only when library confirms tap_method == "female_jumper")
+      None             — cannot resolve
+    Calls infeasible() if a left-header pin is requested but the board type
+    does not support female-jumper connections.
     """
     if "." not in pin_ref:
         return None
@@ -298,11 +300,27 @@ def resolve_component_pin(pin_ref: str, placements: dict,
             col, row = esp32_pin_map[pin_name]
             half = "left" if col in LEFT_HALF else "right"
             if half == "right":
-                # Right-header: tap via col J (outside body)
+                # Right-header: tap via col J (outside body, always accessible)
                 return ("J", row)
             else:
-                # Left-header: no adjacent hole accessible — female wire above PCB
-                return ("pin:", f"esp32.{pin_name}")
+                # Left-header: no adjacent breadboard hole exists (body covers B–E).
+                # Whether a female jumper above the PCB is feasible depends on the board.
+                lib_spec = library.get("board-esp32-s3-devkitc-1", {})
+                tap_method = (lib_spec.get("header_info", {})
+                              .get("left", {}).get("tap_method", "none"))
+                if tap_method == "female_jumper":
+                    return ("pin:", f"esp32.{pin_name}")
+                else:
+                    infeasible(
+                        "GPIO_INACCESSIBLE",
+                        f"esp32.{pin_name} is on the left header (col A, row {row}). "
+                        f"No adjacent breadboard hole exists (cols B–E rows 1–22 are "
+                        f"blocked by the PCB body), and parts_library.yaml reports "
+                        f"header_info.left.tap_method='{tap_method}' — female jumper "
+                        f"attachment is not physically feasible for this board variant. "
+                        f"Fix: reassign this signal to a right-header GPIO (col I, "
+                        f"tapped via col J), or use point-to-point assembly (p2p_layout.py)."
+                    )
         return None
 
     if cid in placements:
@@ -314,7 +332,8 @@ def resolve_component_pin(pin_ref: str, placements: dict,
 
 
 def route_net(net: dict, placements: dict, esp32_pin_map: dict,
-              board: BoardState, wires: list, ext_comps: dict) -> None:
+              board: BoardState, wires: list, ext_comps: dict,
+              library: dict) -> None:
     """
     Route all connections in a net, generating wire entries.
     A net may connect to rails, ESP32 pins, placed components, or external components.
@@ -347,7 +366,7 @@ def route_net(net: dict, placements: dict, esp32_pin_map: dict,
                 endpoints.append(("ext", f"ext:{cid}:{pin_name}"))
                 continue
 
-        resolved = resolve_component_pin(pin_ref, placements, esp32_pin_map)
+        resolved = resolve_component_pin(pin_ref, placements, esp32_pin_map, library)
         if resolved is None:
             # Skip unresolvable pins silently (e.g. NC pins)
             continue
@@ -563,7 +582,7 @@ def main() -> None:
     for net in netlist.get("nets", []):
         if net.get("note", "").startswith("Unconnected"):
             continue   # skip NC nets
-        route_net(net, placements, esp32_pin_map, board, wires, ext_comps)
+        route_net(net, placements, esp32_pin_map, board, wires, ext_comps, library)
 
     # ── Write output ──────────────────────────────────────────────────────────
     yaml_text = build_yaml(board, placements, wires, netlist, library)

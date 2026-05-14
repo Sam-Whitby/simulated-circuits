@@ -166,14 +166,14 @@ external_components:
 
 wires:
   # ── Power rail setup ────────────────────────────────────────────────────
-  # 3V3 pins are left-header only (A1, A2). No adjacent breadboard hole is
-  # accessible (all of B-E in rows 1-26 are under the ESP32 PCB body).
-  # Use a female-to-male jumper wire plugged directly onto the header pin.
-
-  - from: pin:esp32.3V3.1    # female end onto A1 pin above PCB
-    to:   rail-plus
-    color: red
-    purpose: ESP32 3.3V → (+) power rail
+  # 3V3 pins are left-header only (A1, A2) and cannot be tapped from the
+  # breadboard — no adjacent hole exists (B–E rows 1–22 blocked by PCB body),
+  # and this board variant does not support female-jumper connections
+  # (parts_library.yaml: header_info.left.tap_method = "none").
+  # 3V3 power for external peripherals must come from a separate 3.3V supply,
+  # or the circuit should use P2P mode (p2p_layout.py) instead.
+  #
+  # GND is available on the right header: I1 (GND.2), tapped via J1.
 
   - from: J1                 # row 1 right-half; I1 occupied by esp32.GND.2; J1 is free
     to:   rail-minus

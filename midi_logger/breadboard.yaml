@@ -77,13 +77,15 @@ external_components:
     VCC: rail-plus
     GND: rail-minus
 wires:
-- from: pin:esp32.3V3.1
-  to: rail-plus
-  color: gray
-  purpose: VCC_3V3
-- from: pin:esp32.GND.1
+# NOTE: 3V3 is only available on left-header pins (A1, A2). These cannot be
+# tapped from the breadboard (no adjacent hole; body covers B–E in rows 1–22)
+# and parts_library.yaml header_info.left.tap_method="none" rules out female
+# jumpers. For circuits requiring a 3V3 breadboard rail, use P2P mode instead
+# (python3 p2p_layout.py netlist.yaml pointtopoint.yaml).
+# GND is available via right-header GND.2 at I1, tapped at J1.
+- from: J1                 # I1 = esp32.GND.2 (right header); J1 is free (outside body)
   to: rail-minus
-  color: gray
+  color: black
   purpose: GND
 - from: ext:sdcard:VCC
   to: rail-plus

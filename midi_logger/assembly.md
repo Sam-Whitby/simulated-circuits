@@ -15,7 +15,7 @@
 | 1 | ESP32-S3-DevKitC-1 | The microcontroller board |
 | 1 | Micro SD card SPI reader module | Connected via 6 jumper wires — does NOT sit on the breadboard |
 | 1 | Full-size breadboard (830 points, 63 rows) | |
-| — | Jumper wires (8 male-to-male + 2 female-to-male) | Assorted colours |
+| — | Jumper wires (7) | Assorted colours |
 | 1 | USB-C cable | To power the ESP32 and upload firmware |
 
 ---
@@ -37,10 +37,15 @@ hole in the same row-half.
 
 **The ESP32 body rule**: the ESP32-S3-DevKitC-1 PCB physically covers
 **rows 1–26, columns A–I**.  Only the actual header pin holes (A1–A22 and
-I1–I22) are accessible in this zone.  For left-header pins with no free
-adjacent hole, use a female-to-male jumper wire plugged directly onto the
-exposed pin above the PCB board.  For right-header GPIO pins, use column J
-(same right-half row — J is outside the PCB body and always accessible).
+I1–I22) are accessible in this zone.  Left-header pins (col A, rows 1–22)
+have no adjacent free hole — columns B–E in those rows are blocked by the
+PCB body.  For right-header GPIO pins, use column J (same right-half row —
+J is outside the PCB body and always accessible).
+
+**Left-header connections**: the `parts_library.yaml` `header_info.left.tap_method`
+field determines whether left-header pins can be tapped.  If `"none"` (the
+default for this board variant), circuits that require left-header connections
+must use point-to-point (P2P) assembly instead of a breadboard.
 
 ---
 
@@ -53,7 +58,7 @@ and col J (outside body) are accessible in that zone.
 
 | Row | Left (col A) | Used? | Row | Right (col I) | Used? |
 |-----|-------------|-------|-----|--------------|-------|
-| 1 | **3V3.1** | VCC_3V3 | 1 | GND.2 | — |
+| 1 | **3V3.1** | GND | 1 | **GND.2** | GND |
 | 2 | 3V3.2 | — | 2 | TX | — |
 | 3 | RST | — | 3 | RX | — |
 | 4 | 4 | — | 4 | 1 | — |
@@ -65,7 +70,7 @@ and col J (outside body) are accessible in that zone.
 | 10 | **17** | SD_CS | 10 | **38** | SD_CS |
 | 11 | **18** | SD_MISO | 11 | **37** | SD_MISO |
 | 12 | **8** | SD_SCK | 12 | **36** | SD_SCK |
-| 13 | **3** | VCC_3V3 | 13 | **35** | SD_MOSI |
+| 13 | **3** | SD_MOSI | 13 | **35** | SD_MOSI |
 | 14 | 46 | — | 14 | 0 | — |
 | 15 | 9 | — | 15 | 45 | — |
 | 16 | 10 | — | 16 | 48 | — |
@@ -74,7 +79,7 @@ and col J (outside body) are accessible in that zone.
 | 19 | 13 | — | 19 | 20 | — |
 | 20 | 14 | — | 20 | 19 | — |
 | 21 | 5V | — | 21 | GND.3 | — |
-| 22 | **GND.1** | GND | 22 | GND.4 | — |
+| 22 | GND.1 | — | 22 | GND.4 | — |
 
 ---
 
@@ -91,7 +96,7 @@ Work in order. Complete each step before moving on.
 
 **A1.** Orient the breadboard with row 1 at the top.
 
-**A2.** Hold the ESP32-S3-DevKitC-1 with the USB-C port facing away from you.
+**A2.** Hold the ESP32-S3-DevKitC-1 with: USB-C port facing away from row 1 (the top of the breadboard).
 
 **A3.** Press the board firmly into the breadboard so that:
 - The left header pins go into **column A, rows 1–22**.
@@ -105,13 +110,11 @@ Column J (rows 1–22) is outside the board body and accessible for wiring.
 ### Part B — Set up the power rails
 
 
-**B1.** Take a **gray female-to-male** jumper wire.  Plug the **female (socket) end** directly onto the ESP32 header pin `3V3.1` (the pin protrudes above the PCB).  Insert the **male end** into the (+) power rail.
+**B1.** Take a **black** jumper wire.  Insert one end into hole J1 (row 1, right half).  Connect the other end to the (−) power rail.
 
-**B2.** Take a **gray female-to-male** jumper wire.  Plug the **female (socket) end** directly onto the ESP32 header pin `GND.1` (the pin protrudes above the PCB).  Insert the **male end** into the (−) power rail.
+**B2.** Take a **gray** jumper wire.  Insert one end into sdcard module pin VCC.  Connect the other end to the (+) power rail.
 
-**B3.** Take a **gray** jumper wire.  Insert one end into sdcard module pin VCC.  Connect the other end to the (+) power rail.
-
-**B4.** Take a **gray** jumper wire.  Insert one end into sdcard module pin GND.  Connect the other end to the (−) power rail.
+**B3.** Take a **gray** jumper wire.  Insert one end into sdcard module pin GND.  Connect the other end to the (−) power rail.
 
 
 ### Part C — External component connections
@@ -154,21 +157,19 @@ Verify all wires before applying power:
 
 |---|------|----|--------|---------|
 
-| 1 | ESP32 pin 3V3.1 (female) | (+) rail | gray | VCC_3V3 |
+| 1 | J1 | (−) rail | black | GND |
 
-| 2 | ESP32 pin GND.1 (female) | (−) rail | gray | GND |
+| 2 | sdcard pin VCC | (+) rail | gray | SD_VCC |
 
-| 3 | sdcard pin VCC | (+) rail | gray | SD_VCC |
+| 3 | sdcard pin GND | (−) rail | gray | SD_GND |
 
-| 4 | sdcard pin GND | (−) rail | gray | SD_GND |
+| 4 | J13 | sdcard pin MOSI | gray | SD_MOSI |
 
-| 5 | J13 | sdcard pin MOSI | gray | SD_MOSI |
+| 5 | J11 | sdcard pin MISO | gray | SD_MISO |
 
-| 6 | J11 | sdcard pin MISO | gray | SD_MISO |
+| 6 | J12 | sdcard pin SCK | gray | SD_SCK |
 
-| 7 | J12 | sdcard pin SCK | gray | SD_SCK |
-
-| 8 | J10 | sdcard pin CS | gray | SD_CS |
+| 7 | J10 | sdcard pin CS | gray | SD_CS |
 
 
 **Power-on checklist:**
