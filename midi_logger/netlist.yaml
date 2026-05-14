@@ -1,0 +1,79 @@
+# netlist.yaml — Machine-readable logical circuit netlist.
+#
+# Circuit: MIDI Logger — ESP32-S3 USB host + Micro SD Card
+#
+# The Yamaha P-125 connects to the ESP32-S3's native USB port via:
+#   USB-B cable → USB-A end → Mepsies OTG adapter (USB-A female / USB-C male)
+#   → ESP32-S3 DevKitC-1 "USB" port (native OTG, GPIO19/20).
+#
+# This connection is cable-only — no breadboard components involved.
+# The SD card module is the only electronic component requiring wiring.
+
+version: "1.0"
+circuit: "MIDI Logger — ESP32-S3 USB host + Micro SD Card"
+
+components:
+  - id: esp32
+    type: board-esp32-s3-devkitc-1
+    note: "Fixed placement: left header col A rows 1-22, right header col I rows 1-22"
+
+  - id: sdcard
+    type: microsd-spi-module
+    external: true
+    note: "External — SPI module with built-in SD slot; connect via 6 jumper wires"
+
+nets:
+  # ── Power rails ──────────────────────────────────────────────────────────────
+  - name: VCC_3V3
+    note: "3.3 V supply from ESP32 to breadboard + rail"
+    pins:
+      - esp32.3V3.1
+    rails:
+      - rail:plus
+
+  - name: GND
+    note: "Ground from ESP32 to breadboard − rail"
+    pins:
+      - esp32.GND.1
+    rails:
+      - rail:minus
+
+  # ── SD card power ─────────────────────────────────────────────────────────────
+  - name: SD_VCC
+    note: "SD module power from 3.3 V rail"
+    pins:
+      - sdcard.VCC
+    rails:
+      - rail:plus
+
+  - name: SD_GND
+    note: "SD module ground to GND rail"
+    pins:
+      - sdcard.GND
+    rails:
+      - rail:minus
+
+  # ── SD card SPI ───────────────────────────────────────────────────────────────
+  - name: SD_MOSI
+    note: "SPI data host→card (GPIO35, right header I13, tap J13)"
+    pins:
+      - esp32.35        # GPIO35 — right header I13
+      - sdcard.MOSI
+
+  - name: SD_MISO
+    note: "SPI data card→host (GPIO37, right header I11, tap J11)"
+    pins:
+      - esp32.37        # GPIO37 — right header I11
+      - sdcard.MISO
+
+  - name: SD_SCK
+    note: "SPI clock (GPIO36, right header I12, tap J12)"
+    pins:
+      - esp32.36        # GPIO36 — right header I12
+      - sdcard.SCK
+
+  - name: SD_CS
+    note: "SPI chip-select (GPIO38, right header I10, tap J10)"
+    pins:
+      - esp32.38        # GPIO38 — right header I10
+      - sdcard.CS

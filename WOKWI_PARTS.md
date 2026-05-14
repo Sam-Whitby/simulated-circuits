@@ -97,6 +97,14 @@ GPIO pins use numeric names only — NOT "GPIO4", just `"4"`.
 
 ---
 
+## Storage
+
+| Physical Component | Wokwi Part Type | Pins | Notes |
+|---|---|---|---|
+| Micro SD Card Reader Module | `wokwi-microsd-card` | `CS`, `SCK`, `DI` (MOSI), `DO` (MISO), `CD`, `VCC`, `GND` | SPI interface. Wokwi uses `DI`/`DO` not `MOSI`/`MISO`. Wokwi creates a virtual FAT filesystem automatically. |
+
+---
+
 ## Looking Up Unknown Parts
 
 If a component isn't listed here, find its Wokwi part type and pins before writing diagram.json:

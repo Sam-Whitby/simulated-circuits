@@ -31,7 +31,39 @@ IMPORTANT:
 - solderless breadboard
 - jumper wires
 - Dupont wires
-- USB cables
+- USB cables (various)
+
+## USB Cables & Adapters
+
+### USB-B to USB-A Cable (Printer Cable)
+- Male USB-B (Type B square plug) → Male USB-A
+- Standard 1–2 m length
+- Used to connect Yamaha P-125 USB-B port to host/adapter
+
+### Mepsies USB-C to USB 3.0 OTG Adapter (3 pack, Grey)
+- USB-C male → USB-A female (OTG)
+- USB 3.0 / backwards-compatible with USB 2.0
+- Physical: 30.5 × 16 × 7.6 mm aluminium body
+- Allows USB-C devices (e.g. ESP32-S3 native USB port) to HOST USB-A peripherals
+- Product: Mepsies USB C to USB 3.0 OTG Adapter — Amazon
+- IMPORTANT: this adapter makes the USB-C port a HOST (not a device)
+
+---
+
+## Storage
+
+### Micro SD Card (16 GB)
+- 16 GB capacity, standard microSD format
+- Formatted FAT32 (required by Arduino SD library)
+- Used with Micro SD Card Reader Module via SPI
+
+### Micro SD Card Mini TF Reader Module
+- Supplier: Switch Electronics (switchelectronics.co.uk)
+- Interface: SPI (4-wire: MOSI, MISO, SCK, CS) + power (VCC, GND)
+- Operating voltage: 3.3 V (compatible with ESP32-S3 directly, no level-shifting needed)
+- 6-pin single-row header (2.54 mm pitch)
+- Module PCB with built-in micro SD slot — connect via 6 jumper wires
+- Compatible with Arduino SD library
 
 ---
 

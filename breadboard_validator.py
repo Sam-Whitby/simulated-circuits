@@ -29,7 +29,7 @@ LEFT_HALF  = set("ABCDE")
 RIGHT_HALF = set("FGHIJ")
 DEFAULT_MAX_ROWS = 63
 RAIL_PREFIXES     = ("rail-", "rail+", "rail_")
-EXTERNAL_PREFIXES = ("external:", "ext:")
+EXTERNAL_PREFIXES = ("external:", "ext:", "pin:")  # "pin:" = female wire onto MCU header pin
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,10 +74,10 @@ def load_library(breadboard_path: str, explicit_path: str | None = None) -> dict
     candidates = []
     if explicit_path:
         candidates.append(explicit_path)
-    # Auto-discover alongside the breadboard file
-    auto = os.path.join(os.path.dirname(os.path.abspath(breadboard_path)),
-                        "parts_library.yaml")
-    candidates.append(auto)
+    # Auto-discover alongside the breadboard file, then in the parent directory
+    base = os.path.dirname(os.path.abspath(breadboard_path))
+    candidates.append(os.path.join(base, "parts_library.yaml"))
+    candidates.append(os.path.join(os.path.dirname(base), "parts_library.yaml"))
 
     for path in candidates:
         if os.path.exists(path):
@@ -260,6 +260,43 @@ def validate(breadboard_path: str, library_path: str | None = None) -> list[str]
                 cid,
             ))
 
+    # ── 1b. Build index of all declared component pins for pin: reference checks ─
+    comp_pin_index: dict[str, set] = {}   # comp_id → {pin_name, ...}
+    for comp in layout.get("components", []):
+        cid = comp.get("id", "<unnamed>")
+        comp_pin_index[cid] = set(comp.get("pins", {}).keys())
+    for comp in layout.get("external_components", []):
+        cid = comp.get("id", "<unnamed>")
+        # External components use their connections dict as the pin set
+        comp_pin_index[cid] = set(comp.get("connections", {}).keys())
+
+    # ── 1c. Validate pin: wire endpoints reference real component pins ──────────
+    for wire in layout.get("wires", []):
+        label = wire.get("purpose", "unnamed wire")
+        for side in ("from", "to"):
+            raw = str(wire.get(side, "")).strip()
+            if not raw.startswith("pin:"):
+                continue
+            # Expected format: pin:component_id.pin_name
+            rest = raw[4:]  # strip "pin:"
+            if "." not in rest:
+                errors.append(
+                    f"INVALID PIN REF: '{raw}' ({side} of '{label}') — "
+                    f"expected format pin:component_id.pin_name"
+                )
+                continue
+            cid, pin_name = rest.split(".", 1)
+            if cid not in comp_pin_index:
+                errors.append(
+                    f"UNKNOWN COMPONENT: '{raw}' ({side} of '{label}') — "
+                    f"component '{cid}' is not declared in components or external_components"
+                )
+            elif pin_name not in comp_pin_index[cid]:
+                errors.append(
+                    f"UNKNOWN PIN: '{raw}' ({side} of '{label}') — "
+                    f"'{pin_name}' is not a declared pin of component '{cid}'"
+                )
+
     # ── 2. Check every wire endpoint ──────────────────────────────────────────
     for wire in layout.get("wires", []):
         label = wire.get("purpose", "unnamed wire")
@@ -274,6 +311,55 @@ def validate(breadboard_path: str, library_path: str | None = None) -> list[str]
                     f"WIRE IN OCCUPIED HOLE: {key} ({side} of '{label}') "
                     f"is already used by {occupied[key]}"
                 )
+
+    # ── 2b. Check wire endpoints inside component body zones ──────────────────
+    # A wire endpoint may not land inside a component's PCB body even if the
+    # hole is not listed as occupied — the physical body blocks access.
+    for wire in layout.get("wires", []):
+        label = wire.get("purpose", "unnamed wire")
+        for side in ("from", "to"):
+            raw = str(wire.get(side, ""))
+            if not raw or parse_hole(raw) is None:
+                continue
+            col, row = parse_hole(raw)
+            col_idx = col_index(col)
+            key = f"{col}{row}"
+            if key in occupied:
+                continue  # already reported by check 2 if it's a conflict
+            for body in bodies:
+                t, b_row, lc, rc, comp_id = body
+                if (t <= row <= b_row and
+                        col_index(lc) <= col_idx <= col_index(rc)):
+                    errors.append(
+                        f"WIRE IN BODY ZONE: {key} ({side} of '{label}') "
+                        f"is inside the physical body of '{comp_id}' "
+                        f"(rows {t}–{b_row}, cols {lc}–{rc}) — "
+                        f"this hole is physically inaccessible"
+                    )
+                    break
+
+    # ── 2c. Check component pins inside foreign component body zones ───────────
+    # A component's pin must not fall inside another component's PCB body.
+    for comp in layout.get("components", []):
+        cid = comp.get("id", "<unnamed>")
+        for pin_name, raw_hole in comp.get("pins", {}).items():
+            parsed = parse_hole(str(raw_hole))
+            if parsed is None:
+                continue
+            col, row = parsed
+            col_idx = col_index(col)
+            for body in bodies:
+                t, b_row, lc, rc, body_id = body
+                if body_id == cid:
+                    continue  # own body — pins are inside it by definition
+                if (t <= row <= b_row and
+                        col_index(lc) <= col_idx <= col_index(rc)):
+                    errors.append(
+                        f"PIN IN FOREIGN BODY: {cid}.{pin_name} at "
+                        f"{col}{row} is inside the body of '{body_id}' "
+                        f"(rows {t}–{b_row}, cols {lc}–{rc})"
+                    )
+                    break
 
     # ── 3. Check component body overlaps ──────────────────────────────────────
     for i, b1 in enumerate(bodies):

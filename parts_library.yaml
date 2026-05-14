@@ -175,9 +175,29 @@ components:
       The board body physically covers rows 1–26, columns A–J.
       No component or wire endpoint may be placed in that zone.
 
+    pins:
+      # Only the anchor pin is listed here — it establishes where the board sits.
+      # Individual GPIO positions are declared in breadboard.yaml; their mapping is
+      # complex (GPIO number ≠ row number) and is NOT validated via the library.
+      3V3.1: {offset_col: 0, offset_row: 0}   # anchor — left header pin 1 (top-left)
+
     body_breadboard:
       # Body relative to left-header pin 1 (anchor = 3V3.1 at A1)
       rows_above_anchor:    0
       rows_below_anchor:    25   # body bottom at row 26 (pin22 at row 22 + 4 overhang)
       cols_left_of_anchor:  0
-      cols_right_of_anchor: 9    # board spans cols A–J (9 columns right of A)
+      cols_right_of_anchor: 8    # board spans cols A–I (right header at I, 22.86 mm from A)
+      # NOTE: col J is OUTSIDE the board body (board right edge at 24.18 mm, col J centre
+      # at 25.40 mm from col A, given 5.08 mm centre gap).  Col J is physically accessible
+      # and is the correct tap point for right-header GPIO wires.
+
+  # ── Micro SD Card SPI Reader Module ─────────────────────────────────────────
+  microsd-spi-module:
+    description: "Micro SD card SPI reader module (6-pin)"
+    source: "https://www.switchelectronics.co.uk/products/micro-sd-card-mini-tf-reader-module"
+    notes: |
+      6-pin SPI interface in a single row (2.54 mm pitch): VCC, GND, MISO, MOSI, SCK, CS.
+      The module PCB carries the SD card slot and is too bulky to place on the breadboard.
+      Operating voltage: 3.3 V — direct connection to ESP32-S3 3V3 pin, no level shifting.
+      Connect via 6 female-to-male jumper wires from right-header GPIO taps (column J).
+    external_only: true   # always connect via jumper wires, never place on breadboard

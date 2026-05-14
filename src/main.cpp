@@ -1,13 +1,13 @@
 #include <Arduino.h>
 #include <LiquidCrystal.h>
 
-static const int LDR_PIN = 1;   // ADC1_CH0
-static const int LCD_RS  = 4;
-static const int LCD_EN  = 5;
-static const int LCD_D4  = 6;
-static const int LCD_D5  = 7;
-static const int LCD_D6  = 8;
-static const int LCD_D7  = 9;
+static const int LDR_PIN = 1;    // ADC1_CH0 — right header I4, tapped at J4
+static const int LCD_RS  = 2;    // right header I5,  tapped at J5
+static const int LCD_EN  = 42;   // right header I6,  tapped at J6
+static const int LCD_D4  = 41;   // right header I7,  tapped at J7
+static const int LCD_D5  = 40;   // right header I8,  tapped at J8
+static const int LCD_D6  = 39;   // right header I9,  tapped at J9
+static const int LCD_D7  = 38;   // right header I10, tapped at J10
 
 static const unsigned long UPDATE_MS = 1000;
 

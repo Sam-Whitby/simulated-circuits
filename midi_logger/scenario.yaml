@@ -1,0 +1,14 @@
+name: MIDI Logger Validation
+version: 1
+
+steps:
+  # Wait for system to boot
+  - delay: 4000ms
+
+  # First synthetic MIDI note fires 1.5 s after boot; note-off at 2 s.
+  # The JSON line (with "note":) is emitted on note-off.
+  - wait-serial: '"note":'
+
+  # Verify a second note appears (confirms arpeggio is running)
+  - delay: 1500ms
+  - wait-serial: '"note":'

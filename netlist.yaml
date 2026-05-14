@@ -1,0 +1,163 @@
+# netlist.yaml — Machine-readable logical circuit netlist.
+#
+# This is the single source of truth for circuit connectivity in the physical
+# assembly stage.  It is derived from diagram.json (the validated Wokwi
+# simulation) but expressed in terms of physical component pins rather than
+# Wokwi-specific part/pin names.
+#
+# Both breadboard_placer.py and p2p_layout.py read this file to generate the
+# corresponding assembly layout.  The validator cross-references it to confirm
+# that firmware GPIO assignments match the physical wiring.
+#
+# Pin naming:
+#   component_id.pin_name   — pin on an on-board or external component
+#   rail:plus               — 3.3 V power rail
+#   rail:minus              — GND rail
+#
+# A "net" is a set of pins that must all be electrically connected.
+# Every pin of every component must appear in exactly one net.
+
+version: "1.0"
+circuit: "Ambient light sensor — ESP32-S3 + LDR voltage divider + LCD1602"
+
+components:
+  - id: esp32
+    type: board-esp32-s3-devkitc-1
+    note: "Fixed placement: left header col A rows 1-22, right header col I rows 1-22"
+
+  - id: ldr
+    type: photoresistor-ldr
+    note: "GL5528 5mm LDR; leads inserted vertically"
+
+  - id: resistor-10k
+    type: resistor
+    note: "10 kΩ 1/4W axial pull-down resistor"
+
+  - id: pot
+    type: potentiometer-10k
+    note: "B10K rotary pot for LCD contrast; must be rotated 90° for breadboard"
+
+  - id: lcd
+    type: lcd1602-16pin
+    external: true
+    note: "External — PCB too large for on-board placement; connected via jumper wires"
+
+nets:
+  # ── Power ────────────────────────────────────────────────────────────────
+  - name: VCC_3V3
+    pins:
+      - esp32.3V3.1
+      - esp32.3V3.2
+    rails:
+      - rail:plus
+
+  - name: GND
+    pins:
+      - esp32.GND.1
+      - esp32.GND.2
+      - esp32.GND.3
+      - esp32.GND.4
+    rails:
+      - rail:minus
+
+  # ── LDR voltage divider ─────────────────────────────────────────────────
+  - name: LDR_VCC
+    pins:
+      - ldr.lead-1
+    rails:
+      - rail:plus
+
+  - name: ADC_JUNCTION
+    note: "Midpoint of voltage divider; ESP32 reads light level here"
+    pins:
+      - ldr.lead-2
+      - resistor-10k.lead-1
+      - esp32.1          # GPIO1 — ADC input
+
+  - name: RESISTOR_GND
+    pins:
+      - resistor-10k.lead-2
+    rails:
+      - rail:minus
+
+  # ── Potentiometer (LCD contrast) ─────────────────────────────────────────
+  - name: POT_GND
+    pins:
+      - pot.gnd-end
+    rails:
+      - rail:minus
+
+  - name: POT_VCC
+    pins:
+      - pot.vcc-end
+    rails:
+      - rail:plus
+
+  - name: LCD_CONTRAST
+    pins:
+      - pot.wiper
+      - lcd.V0
+
+  # ── LCD power and mode ───────────────────────────────────────────────────
+  - name: LCD_GND
+    pins:
+      - lcd.VSS
+      - lcd.RW           # RW tied low = write-only mode
+      - lcd.K            # backlight cathode
+    rails:
+      - rail:minus
+
+  - name: LCD_VCC
+    pins:
+      - lcd.VDD
+      - lcd.A            # backlight anode
+    rails:
+      - rail:plus
+
+  # ── GPIO → LCD control signals ───────────────────────────────────────────
+  - name: LCD_RS
+    pins:
+      - esp32.2          # GPIO2 — right header I5
+      - lcd.RS
+
+  - name: LCD_E
+    pins:
+      - esp32.42         # GPIO42 — right header I6
+      - lcd.E
+
+  - name: LCD_D4
+    pins:
+      - esp32.41         # GPIO41 — right header I7
+      - lcd.D4
+
+  - name: LCD_D5
+    pins:
+      - esp32.40         # GPIO40 — right header I8
+      - lcd.D5
+
+  - name: LCD_D6
+    pins:
+      - esp32.39         # GPIO39 — right header I9
+      - lcd.D6
+
+  - name: LCD_D7
+    pins:
+      - esp32.38         # GPIO38 — right header I10
+      - lcd.D7
+
+  # ── Unused LCD data pins (4-bit mode) ────────────────────────────────────
+  - name: LCD_D0_NC
+    pins: [lcd.D0]
+    note: "Unconnected in 4-bit mode"
+
+  - name: LCD_D1_NC
+    pins: [lcd.D1]
+    note: "Unconnected in 4-bit mode"
+
+  - name: LCD_D2_NC
+    pins: [lcd.D2]
+    note: "Unconnected in 4-bit mode"
+
+  - name: LCD_D3_NC
+    pins: [lcd.D3]
+    note: "Unconnected in 4-bit mode"

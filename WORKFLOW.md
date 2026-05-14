@@ -75,89 +75,92 @@ Your goal:
     Parse sim.log to assert values span the expected range.
     Fix firmware or diagram if assertions fail, then re-run from step 6.
 
-11a. Write breadboard.yaml — the machine-readable physical layout.
+11a. Write netlist.yaml — the machine-readable logical netlist.
 
     Do NOT start until steps 7–10 have all passed.
 
-    breadboard.yaml specifies every component placement and every jumper wire using the
-    coordinate system defined in breadboard_validator.py (columns A–J, rows 1–63).
+    netlist.yaml expresses the validated circuit from diagram.json in terms of physical
+    component pins and named nets. It is the single source of truth for all physical
+    assembly steps and is read by both breadboard_placer.py and p2p_layout.py.
 
-    Critical rules for writing breadboard.yaml:
-    - Every component must have a `type:` field matching an entry in parts_library.yaml.
-    - A breadboard hole accepts exactly ONE lead or pin. Two items cannot share a hole.
-    - Every jumper wire endpoint must be in a DIFFERENT hole from any component pin, even
-      if that pin is in the same row-half (i.e. electrically the same node). Use an
-      adjacent column in the same row-half for the wire.
-    - Compute the PCB body bounding box from board.json dimensions:
-        bottom-row = last_pin_row + ceil((board_height - last_pin_y) / 2.54)
-      No component may be placed inside this bounding box.
-    - For the LDR voltage divider, the LDR and 10K resistor share one junction node but
-      must NOT share a hole. Place them in adjacent columns of the same row so they are
-      electrically connected without occupying the same hole.
-    - For any component marked external_only: true in parts_library.yaml, add it to the
-      `external_components:` section (not `components:`). List its connection points so
-      assembly.md can document the wiring.
-    - For the potentiometer (2+1 pin type): rotate 90° so the two terminals are in the
-      SAME COLUMN but different rows (2 rows apart), with the wiper 2 columns to the
-      right in the middle row. This prevents the terminals from being shorted by the
-      breadboard row-half connection.
-    - Use `ext:component:PIN` as the wire `to:` endpoint for external component pins.
-      These are skipped by the validator's hole-conflict check.
+    Format:
+      components: list of {id, type, note, external: true (if too large for breadboard)}
+      nets: list of {name, pins: [comp_id.pin_name, ...], rails: [rail:plus/rail:minus],
+                     note: "..." (optional)}
 
-    Derived layout for ESP32-S3-DevKitC-1 (from board.json: height=70.057mm,
-    last pin at y=61.007mm, pin-1 at y=7.667mm, 22 pins per side):
-    - Left header: col A, rows 1–22
-    - Right header: col I, rows 1–22
-    - Body bounding box: rows 1–26, cols A–J  ← nothing else may go here
+    Every pin of every component must appear in exactly one net.
+    Use rail:plus for 3.3V and rail:minus for GND.
+    Mark large external components (e.g. LCD1602) with `external: true`.
 
-11b. Run the breadboard validator (no token required, no quota):
+11b. Run the breadboard placer (algorithmic layout — no guessing):
+
+        python3 breadboard_placer.py netlist.yaml breadboard.yaml
+
+    Exit 0 → breadboard.yaml written; proceed to 11c.
+    Exit 2 → breadboard INFEASIBLE. Reason and suggestion are printed to stdout.
+             Read the suggestion. Options:
+               (a) Fix the issue (reassign GPIOs, reduce components, adjust
+                   parts_library.yaml) and re-run from 11b.
+               (b) Proceed to 11e for point-to-point assembly instead.
+    Exit 1 → tool error (bad input); fix and re-run.
+
+    The placer enforces all physical constraints by construction:
+      • Hole occupancy — no two pins in the same hole
+      • Wire endpoints — never inside a component body zone
+      • Component body zones — no overlaps, no pins in foreign body zones
+      • ESP32 body (rows 1–26, cols A–I) — nothing placed inside it
+      • Right-header GPIOs (col I) tapped via col J (outside body — always accessible)
+      • Left-header GPIOs (col A) connected via `pin:esp32.X` female jumpers
+      • External components — listed in external_components: section, not placed on board
+      • Breadboard capacity — all placements within 63 rows
+
+11c. (Breadboard path) Run the validator — safety net:
 
         python3 breadboard_validator.py breadboard.yaml
 
+    Zero errors required. The validator is a final safety check; if errors appear after
+    the placer exits 0, that is a placer bug — report it.
+
     The validator checks:
-      (a) Hole occupancy conflicts — two pins in the same hole.
-      (b) Wire endpoints in occupied holes.
-      (c) Pin layout validation — declared pin positions must match the
-          parts_library.yaml spacing for each component type.
-      (d) Full body footprint overlap — uses library dimensions (not just the
-          declared body box) so oversized components are caught even if the
-          declared body is too small.
-      (e) external_only flag — errors if an external-only component is placed
-          on-board.
-      (f) Breadboard capacity — layout must fit within 63 rows.
+      (a) Hole occupancy conflicts — two pins in the same hole
+      (b) Wire endpoints in occupied holes
+      (b2) Wire endpoints inside component body zones (WIRE IN BODY ZONE)
+      (b3) Component pins inside foreign body zones (PIN IN FOREIGN BODY)
+      (c) Pin layout validation — declared pin positions match parts_library.yaml spacing
+      (d) Full body footprint overlap — library dimensions cross-checked against declared box
+      (e) external_only flag — errors if an external-only component is placed on-board
+      (f) Breadboard capacity — layout must fit within 63 rows
+      (g) pin: wire endpoints — must reference a real declared component pin
 
-    Zero errors required. Fix breadboard.yaml and re-run until it exits 0.
+11d. (Breadboard path) Generate assembly.md:
 
-11c. Generate assembly.md from the validated breadboard.yaml.
+        python3 assembly_generator.py breadboard.yaml assembly.md
 
-    Because the layout passed step 11b, every hole reference in assembly.md is
-    provably unoccupied and physically accessible, and every component is in its
-    correct physical position.
+    Because the layout passed steps 11b and 11c, every hole reference in assembly.md is
+    provably unoccupied and physically accessible, and every component is in its correct
+    physical position. The generator is deterministic — no AI writes hole references.
 
-    assembly.md must contain:
+    The generated assembly.md contains: parts list, breadboard primer, potentiometer
+    orientation guide, ESP32 pin reference table, step-by-step wiring instructions,
+    and a verification checklist. Wire count in assembly.md == wire count in breadboard.yaml.
 
-    **Parts List** — every component including passives; note which components are
-    connected externally (not placed on the breadboard).
+11e. (P2P path — when breadboard is infeasible or user prefers it)
+     Generate point-to-point wiring layout from the netlist:
 
-    **Breadboard primer** — rows 1–63, columns A–E / F–J, row-half connectivity
-    rule, (+)/(−) rail convention.
+        python3 p2p_layout.py netlist.yaml pointtopoint.yaml
 
-    **Potentiometer pin identification** — explain the 2+1 arrangement and the
-    90° rotation required for breadboard use. Include the exact hole positions.
+    P2P assembly: no breadboard required. Components sit on a non-conductive surface.
+    Connections are made with jumper wires directly lead-to-lead (or female-to-male
+    for ESP32 header pins). Always feasible for any valid netlist.
 
-    **ESP32-S3 Pin Reference Table** — all 44 pins (22 per side), exact holes,
-    which are used. Warn that GPIO numbers do not correspond to row numbers.
+    Exit 0 always (only check: NET_SHORT — rail:plus and rail:minus in same net → exit 2).
 
-    **Step-by-step assembly** — derived directly from breadboard.yaml:
-      Part A — Place MCU board
-      Part B — Set up power rails
-      Part C — Light sensor (LDR + resistor)
-      Part D — Potentiometer (with rotation instructions)
-      Part E — External component connections (e.g. LCD via jumper wires)
-      Part F — Verification checklist (all wires) and power-on test
+11f. (P2P path) Generate P2P assembly instructions:
 
-    One action per step. Every hole reference must match breadboard.yaml exactly.
-    After generating, cross-check: count wires in assembly.md == count in breadboard.yaml.
+        python3 assembly_generator.py --mode p2p pointtopoint.yaml assembly.md
+
+    Produces step-by-step wire connection instructions for P2P assembly. Deterministic —
+    all wire counts and connection descriptions derived from pointtopoint.yaml.
 
     Note on light sensor polarity: the physical LDR divider (3.3V → LDR → junction →
     10K → GND, ADC at junction) produces CORRECT behaviour (bright = high %). This
