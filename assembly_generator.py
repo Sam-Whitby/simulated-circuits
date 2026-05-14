@@ -613,34 +613,68 @@ def generate_firmware_section(layout: dict, layout_path: str) -> str:
 
     circuit = layout.get("circuit", "").lower()
     pio_dir = pio["directory"]
-    env      = next(iter(pio["envs"].values()))
+    env           = next(iter(pio["envs"].values()))
     monitor_speed = env.get("monitor_speed", "115200")
     build_flags   = env.get("build_flags", "")
+    has_wokwi     = "WOKWI_SIMULATION" in build_flags.upper()
+
+    # Find configure_firmware.py; compute relative path from pio_dir
+    cfg_rel: str | None = None
+    for d in [pio_dir, os.path.dirname(pio_dir)]:
+        p = os.path.join(d, "configure_firmware.py")
+        if os.path.exists(p):
+            cfg_rel = os.path.relpath(p, pio_dir)
+            break
 
     lines: list[str] = [
         "## Firmware\n",
-        "All commands must be run from the PlatformIO project directory.\n",
+        f"All commands run from the project directory:\n",
         f"```\ncd {pio_dir}\n```\n",
     ]
 
-    if "WOKWI_SIMULATION" in build_flags.upper():
+    if cfg_rel:
+        cfg = f"python3 {cfg_rel}"
+        if has_wokwi:
+            lines += [
+                "> The firmware is currently configured for **Wokwi simulation**",
+                "> (`-DWOKWI_SIMULATION=1`).  The commands below switch modes automatically.",
+                "",
+            ]
         lines += [
-            "> **Warning — `WOKWI_SIMULATION=1` is active.**  The current `platformio.ini`",
-            "> builds firmware that generates a **synthetic MIDI arpeggio** instead of",
-            "> reading from a real keyboard.",
-            ">",
-            "> To target real hardware, edit `platformio.ini`:",
-            "> 1. Remove `-DWOKWI_SIMULATION=1` from `build_flags`.",
-            "> 2. Add `-DARDUINO_USB_MODE=0` (enables native USB OTG host mode).",
-            ">",
-            "> Note: the full USB MIDI host driver is currently stubbed.",
-            "> See `src/main.cpp` for implementation notes.",
-            "",
+            "### Flash to real hardware\n",
+            "```",
+            f"{cfg} hw && pio run --target upload && {cfg} sim",
+            "```\n",
+            "Switches to hardware mode → uploads → restores simulation mode.\n",
+        ]
+        if has_wokwi and "midi" in circuit:
+            lines += [
+                "> Note: the full USB MIDI host driver is currently stubbed.",
+                "> See `src/main.cpp` for implementation notes.",
+                "",
+            ]
+        lines += [
+            "### Switch mode manually\n",
+            "```",
+            f"{cfg} hw      # real hardware (USB OTG enabled)",
+            f"{cfg} sim     # Wokwi simulation",
+            f"{cfg} status  # show current mode",
+            "```\n",
+        ]
+    else:
+        # Fallback: no configure_firmware.py found
+        if has_wokwi:
+            lines += [
+                "> **`WOKWI_SIMULATION=1` is active** — edit `platformio.ini` to remove",
+                "> this flag and add `-DARDUINO_USB_MODE=0` before flashing real hardware.",
+                "",
+            ]
+        lines += [
+            "### Upload\n",
+            "```\npio run --target upload\n```\n",
         ]
 
     lines += [
-        "### Upload\n",
-        "```\npio run --target upload\n```\n",
         "### Monitor\n",
         f"```\npio device monitor --baud {monitor_speed}\n```\n",
     ]

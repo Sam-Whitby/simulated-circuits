@@ -2,9 +2,14 @@
 
 **AI-assisted embedded hardware design with autonomous closed-loop simulation and verification.**
 
-This repository demonstrates a workflow in which an AI coding agent (Claude Code) designs, builds, simulates, and verifies a working circuit entirely autonomously — including debugging and iterating — before producing assembly instructions for a human to wire up the physical hardware.
+This repository demonstrates a workflow in which an AI coding agent (Claude Code) designs, builds, simulates, and verifies working circuits entirely autonomously — including debugging and iterating — before producing assembly instructions for a human to wire up the physical hardware.
 
-The example circuit is an ambient light sensor: a photoresistor wired to an ESP32-S3 that displays a live percentage on an LCD1602 display, updated every second.
+Two circuits are included:
+
+| Circuit | Directory | Assembly mode | Description |
+|---------|-----------|---------------|-------------|
+| Ambient light sensor | `/` (root) | Breadboard | LDR voltage divider → ESP32-S3 ADC → LCD1602 percentage display |
+| MIDI logger | `midi_logger/` | Point-to-point | Yamaha keyboard USB MIDI → ESP32-S3 → micro SD card JSON log |
 
 ---
 
@@ -266,16 +271,31 @@ reference in assembly.md is provably unoccupied and physically accessible.
 ├── CIRCUIT_SPEC.md            # What this circuit must do (functional requirements)
 ├── WORKFLOW.md                # AI agent workflow prompt (copy into agent context)
 ├── WOKWI_PARTS.md             # Physical component → Wokwi simulation part mapping
+│
 ├── parts_library.yaml         # Physical component specs (body size, pin layout)
-├── breadboard_validator.py    # Physical-layout constraint checker (run locally)
-├── breadboard.yaml            # Machine-readable breadboard placement + wiring
-├── assembly.md                # Human-readable step-by-step build instructions
-├── platformio.ini             # PlatformIO build configuration
+├── breadboard_validator.py    # Physical-layout constraint checker
+├── breadboard_placer.py       # Auto-places components into breadboard.yaml
+├── p2p_layout.py              # Generates pointtopoint.yaml from netlist.yaml
+├── assembly_generator.py      # Generates assembly.md from a validated layout
+├── configure_firmware.py      # Switches platformio.ini between sim and hw modes
+│
+├── netlist.yaml               # Logical circuit connections (input to layout tools)
+├── breadboard.yaml            # Breadboard placement + wiring (validated layout)
+├── assembly.md                # Step-by-step build instructions (generated)
+├── platformio.ini             # PlatformIO build config (sim mode by default)
 ├── wokwi.toml                 # Wokwi simulation configuration
 ├── diagram.json               # Wokwi circuit diagram
 ├── scenario.yaml              # Automated simulation test scenario
-└── src/
-    └── main.cpp               # ESP32-S3 Arduino firmware
+├── src/main.cpp               # ESP32-S3 Arduino firmware
+│
+└── midi_logger/               # Second circuit: USB MIDI → SD card logger
+    ├── netlist.yaml           # MIDI logger logical connections
+    ├── pointtopoint.yaml      # P2P wire list (generated from netlist.yaml)
+    ├── assembly.md            # MIDI logger build instructions (generated)
+    ├── platformio.ini         # MIDI logger PlatformIO config (sim mode by default)
+    ├── diagram.json           # Wokwi circuit diagram
+    ├── scenario.yaml          # Wokwi simulation scenario
+    └── src/main.cpp           # MIDI logger firmware
 ```
 
 ### Key file relationships
@@ -286,7 +306,10 @@ COMPONENTS.md      ──► constrains ──► diagram.json parts
 WOKWI_PARTS.md     ──► maps to ──► diagram.json part types + pin names
 scenario.yaml      ──► tests ──► src/main.cpp serial output
 parts_library.yaml ──► validates ──► breadboard.yaml component types + body sizes
-breadboard.yaml    ──► drives ──► assembly.md (generated after validation)
+netlist.yaml       ──► drives ──► breadboard.yaml (via breadboard_placer.py)
+                              └──► pointtopoint.yaml (via p2p_layout.py)
+validated layout   ──► drives ──► assembly.md (via assembly_generator.py)
+platformio.ini     ──► managed by configure_firmware.py (sim ↔ hw)
 WORKFLOW.md        ──► instructs ──► AI agent (Claude Code)
 ```
 
@@ -338,9 +361,34 @@ grep '"pct"' sim.log
 
 All three must pass before trusting the assembly instructions below.
 
-### Assemble the physical circuit
+### Assemble and flash the physical circuit
 
-**Components needed:** ESP32-S3 DevKitC-1, LCD1602, photoresistor (LDR), 10K resistor, potentiometer, breadboard, jumper wires.
+Complete wiring and flashing instructions are in `assembly.md` (ambient light sensor) and `midi_logger/assembly.md` (MIDI logger). Each file covers:
+
+1. Parts list
+2. Step-by-step wiring (with hole references for breadboard, or pin-to-pin for P2P)
+3. Power overview (which USB port to connect, what powers what)
+4. Single-command firmware flashing (no manual file editing)
+5. Serial monitor expected output
+
+#### Firmware modes — `configure_firmware.py`
+
+Each `platformio.ini` ships in Wokwi simulation mode. `configure_firmware.py`
+switches between modes without any manual file editing:
+
+```bash
+# Flash MIDI logger to real hardware and restore simulation mode:
+cd midi_logger
+python3 ../configure_firmware.py hw && pio run --target upload && python3 ../configure_firmware.py sim
+
+# Flash light sensor to real hardware (no mode change needed — no sim flags):
+pio run --target upload
+
+# Check current mode:
+python3 configure_firmware.py status
+```
+
+**Components needed (ambient light sensor):** ESP32-S3 DevKitC-1, LCD1602, photoresistor (LDR), 10K resistor, potentiometer, breadboard, jumper wires.
 
 **Photoresistor voltage divider:**
 

@@ -311,16 +311,26 @@ Verify all wires before applying power:
 
 ## Firmware
 
-All commands must be run from the PlatformIO project directory.
+All commands run from the project directory:
 
 ```
 cd /Users/samwhitby/Documents/PlatformIO/Projects/Test
 ```
 
-### Upload
+### Flash to real hardware
 
 ```
-pio run --target upload
+python3 configure_firmware.py hw && pio run --target upload && python3 configure_firmware.py sim
+```
+
+Switches to hardware mode → uploads → restores simulation mode.
+
+### Switch mode manually
+
+```
+python3 configure_firmware.py hw      # real hardware (USB OTG enabled)
+python3 configure_firmware.py sim     # Wokwi simulation
+python3 configure_firmware.py status  # show current mode
 ```
 
 ### Monitor

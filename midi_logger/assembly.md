@@ -98,27 +98,32 @@ Total wires to connect: **6**
 
 ## Firmware
 
-All commands must be run from the PlatformIO project directory.
+All commands run from the project directory:
 
 ```
 cd /Users/samwhitby/Documents/PlatformIO/Projects/Test/midi_logger
 ```
 
-> **Warning — `WOKWI_SIMULATION=1` is active.**  The current `platformio.ini`
-> builds firmware that generates a **synthetic MIDI arpeggio** instead of
-> reading from a real keyboard.
->
-> To target real hardware, edit `platformio.ini`:
-> 1. Remove `-DWOKWI_SIMULATION=1` from `build_flags`.
-> 2. Add `-DARDUINO_USB_MODE=0` (enables native USB OTG host mode).
->
+> The firmware is currently configured for **Wokwi simulation**
+> (`-DWOKWI_SIMULATION=1`).  The commands below switch modes automatically.
+
+### Flash to real hardware
+
+```
+python3 ../configure_firmware.py hw && pio run --target upload && python3 ../configure_firmware.py sim
+```
+
+Switches to hardware mode → uploads → restores simulation mode.
+
 > Note: the full USB MIDI host driver is currently stubbed.
 > See `src/main.cpp` for implementation notes.
 
-### Upload
+### Switch mode manually
 
 ```
-pio run --target upload
+python3 ../configure_firmware.py hw      # real hardware (USB OTG enabled)
+python3 ../configure_firmware.py sim     # Wokwi simulation
+python3 ../configure_firmware.py status  # show current mode
 ```
 
 ### Monitor
