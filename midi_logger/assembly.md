@@ -17,19 +17,29 @@ In P2P mode the ESP32 is NOT inserted into a breadboard, so left-header pins are
 
 ## Power
 
-**ESP32 power source**: Connect a USB-C cable to the **COM port** (the USB-C
-port on the ESP32-S3-DevKitC-1 connected to the on-board USB bridge chip).
-Plug the other end into a computer or USB charger (≥ 500 mA).
-
 **The ESP32-S3-DevKitC-1 has two USB-C ports:**
 
-| Port | Label | Purpose |
-|------|-------|---------|
-| COM  | `COM` | Power in, serial monitor, firmware upload |
-| OTG  | `USB` | USB host — receives MIDI data from keyboard |
+| Port | Silk label | Purpose |
+|------|------------|---------|
+| COM  | `COM`      | Power in + serial/programming (CH340 bridge) |
+| USB  | `USB`      | USB host — receives MIDI data from keyboard  |
 
-> The keyboard USB cable carries **MIDI data only**.  It does **not** power
-> the ESP32.  Always connect the COM port to power before use.
+**Always power via COM.** The USB port carries keyboard data only — it does
+not power the board.
+
+> **LED behaviour is normal:** plugging into the USB (OTG) port lights the red
+> LED as the USB host driver initialises; plugging into the COM port may show
+> no LED — the CH340 bridge has a separate power path.  Both states are correct.
+
+**For programming (one cable):** COM → computer.
+
+**For standalone operation (two cables simultaneously):**
+
+| Cable | From | To |
+|-------|------|----|
+| Power | COM port | USB power bank (≥ 500 mA) |
+| MIDI data | USB port | MIDI keyboard |
+
 ---
 
 ## Wire-by-Wire Assembly

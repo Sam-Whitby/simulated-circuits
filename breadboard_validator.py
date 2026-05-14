@@ -19,6 +19,7 @@ Usage:
 
 Exit 0 = valid.  Exit 1 = one or more violations found.
 """
+from __future__ import annotations
 
 import os
 import sys

@@ -22,6 +22,7 @@ Flag management rules:
 
 Exit codes: 0 = success, 1 = error.
 """
+from __future__ import annotations
 
 import os
 import sys

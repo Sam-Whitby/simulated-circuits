@@ -118,8 +118,8 @@ and col J (outside body) are accessible in that zone.
 > breadboard.  You must connect an external 3.3 V supply to the (+) rail
 > before powering on, or rebuild this circuit in point-to-point (P2P) mode.
 
-**ESP32 power source**: Connect a USB-C cable to the **COM port** (the USB-C
-port on the ESP32-S3-DevKitC-1 connected to the on-board USB bridge chip).
+**ESP32 power source**: Connect a USB-C cable to the **COM port** (marked
+`COM` on the board — this is the CH340 USB bridge port, not the USB OTG port).
 Plug the other end into a computer or USB charger (≥ 500 mA).
 
 ---
